@@ -147,6 +147,7 @@ create table if not exists public.sb2_tasks (
     source varchar(50) not null default 'manual',
     created_at timestamptz(0) not null default now(),
     updated_at timestamptz(0) not null default now(),
+    constraint ck_sb2_tasks_single_context check (num_nonnulls(project_id, case_id) <= 1),
     constraint ck_sb2_tasks_status check (
         status in ('open', 'planned', 'in_progress', 'blocked', 'to_verify', 'completed', 'cancelled')
     ),
@@ -160,6 +161,7 @@ create table if not exists public.sb2_events (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references public.sb2_users(id),
     project_id uuid references public.sb2_projects(id),
+    case_id uuid references public.sb2_cases(id),
     author_profile_id uuid references public.sb2_author_profiles(id),
     book_id uuid references public.sb2_books(id),
     title varchar(500) not null,
@@ -170,7 +172,8 @@ create table if not exists public.sb2_events (
     status varchar(30) not null default 'planned',
     event_type varchar(40) not null default 'personal',
     created_at timestamptz(0) not null default now(),
-    updated_at timestamptz(0) not null default now()
+    updated_at timestamptz(0) not null default now(),
+    constraint ck_sb2_events_single_context check (num_nonnulls(project_id, case_id) <= 1)
 );
 
 create index if not exists ix_sb2_events_date

@@ -76,5 +76,5 @@ LLM_MODEL
 
 Non caricare mai `backend/.env` nel repository.
 
-Vercel usa l'entrypoint dichiarato in `pyproject.toml`; la build genera
-`frontend/dist` e FastAPI pubblica il frontend insieme alle API `/api/*`.
+Vercel distribuisce il repository come progetto multi-servizio tramite
+`vercel.json`: Vite risponde alla radice e FastAPI gestisce le richieste `/api/*`.

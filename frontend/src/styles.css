@@ -621,6 +621,48 @@ main {
   color: #6a7180;
   font-size: 11px;
 }
+.project-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  margin-right: 7px;
+  border-radius: 7px;
+  background: hsl(var(--project-hue) 48% 90%);
+  color: hsl(var(--project-hue) 46% 30%);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+  flex: 0 0 auto;
+}
+.project-mark.case {
+  border-radius: 4px;
+  background: #ece8f6;
+  color: #554778;
+  font-size: 13px;
+}
+.cal-item .project-mark {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  border-radius: 5px;
+  font-size: 7px;
+}
+.agenda-row > strong {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+}
+.project-quick-select {
+  width: min(230px, 30vw);
+  border: 1px solid #d9d3c9;
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: #fff;
+  color: #263651;
+}
 .empty-slot {
   border: 1px dashed #d9d3c9;
   border-radius: 8px;
@@ -744,6 +786,7 @@ main {
 .project-tasks > div { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 9px; background: #fff; border: 1px solid #ece6de; }
 .project-tasks small { color: #7d8390; }
 .task-dot { width: 8px; height: 8px; border-radius: 50%; background: #d66e42; }
+.event-dot { width: 8px; height: 8px; border-radius: 2px; background: #5577a8; }
 .empty-project { color: #7d8390; }
 .inbox-actions { flex: 0 0 auto !important; flex-direction: row !important; }
 .inbox-actions button { border: 0; border-radius: 8px; padding: 8px 11px; }
@@ -807,6 +850,16 @@ main {
   }
   .row time {
     min-width: 70px;
+  }
+  .agenda-row {
+    flex-wrap: wrap;
+  }
+  .agenda-row > strong {
+    min-width: calc(100% - 88px);
+  }
+  .project-quick-select {
+    width: 100%;
+    margin-left: 84px;
   }
   .cards {
     grid-template-columns: 1fr;

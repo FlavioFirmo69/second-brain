@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .assistant import answer
 from .database import get_session
 from .repository import Repository
-from .schemas import AssistantRequest, BalanceCreate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, SaleCreate, TaskCreate
+from .schemas import AssistantRequest, BalanceCreate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, SaleCreate, TaskCreate
 
 router = APIRouter(prefix="/api")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -56,6 +56,14 @@ def complete_task(task_id: UUID, repository: Repository = Depends(repo)):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.patch("/tasks/{task_id}/context")
+def assign_task_context(task_id: UUID, payload: ProjectAssignment, repository: Repository = Depends(repo)):
+    try:
+        return repository.assign_context("task", task_id, payload.project_id, payload.case_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/events")
 def list_events(
     start: date = Query(default_factory=date.today),
@@ -74,6 +82,14 @@ def create_event(payload: EventCreate, repository: Repository = Depends(repo)):
 def update_event(event_id: UUID, payload: EventCreate, repository: Repository = Depends(repo)):
     try:
         return repository.update_event(event_id, payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/events/{event_id}/context")
+def assign_event_context(event_id: UUID, payload: ProjectAssignment, repository: Repository = Depends(repo)):
+    try:
+        return repository.assign_context("event", event_id, payload.project_id, payload.case_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

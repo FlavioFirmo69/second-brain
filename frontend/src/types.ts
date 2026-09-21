@@ -1,10 +1,10 @@
-export type Task = { id: string; title: string; status: string; priority: number; due_date?: string; due_time?: string }
-export type EventItem = { id: string; title: string; event_date: string; start_time?: string; end_time?: string; location?: string; event_type: string; status: string }
+export type Task = { id: string; title: string; status: string; priority: number; due_date?: string; due_time?: string; project_id?: string; project_code?: string; project_title?: string; case_id?: string; case_code?: string; case_title?: string }
+export type EventItem = { id: string; title: string; event_date: string; start_time?: string; end_time?: string; location?: string; event_type: string; status: string; project_id?: string; project_code?: string; project_title?: string; case_id?: string; case_code?: string; case_title?: string }
 export type Dashboard = { date: string; tasks: Task[]; events: EventItem[] }
 export type Profile = { id: string; code: string; display_name: string; is_pseudonym: boolean; positioning: string; voice_markdown: string; privacy_markdown: string }
 export type Strategy = { id: string; code: string; title: string; content_markdown: string; author_name?: string; book_title?: string }
-export type Project = { id: string; code: string; title: string; status: string; objective?: string; notes_markdown?: string; author_name?: string; book_title?: string; tasks: Task[] }
-export type CaseItem = { id: string; code: string; title: string; status: string; context_markdown: string }
+export type Project = { id: string; code: string; title: string; status: string; objective?: string; notes_markdown?: string; author_name?: string; book_title?: string; tasks: Task[]; events?: EventItem[] }
+export type CaseItem = { id: string; code: string; title: string; status: string; context_markdown: string; tasks?: Task[]; events?: EventItem[] }
 export type Finance = { account: { display_name: string }; balance?: { balance: number; balance_date: string; reconciliation_amount?: number }; planned: Array<{ id: string; transaction_date: string; description: string; amount: number; projected_balance: number }> }
 export type SaleProgress = { items: Array<{ code: string; title: string; sold: number; target_value?: number; target_date?: string; remaining?: number; status: string }> }
 export type InboxItem = { id: string; source: string; text: string; status: string; created_at: string; can_execute: boolean }

@@ -87,9 +87,14 @@ class Repository:
     def list_tasks(self) -> list[dict[str, Any]]:
         self.apply_calendar_rules()
         return rows(self.session.execute(text("""
-            SELECT id,title,status,priority,due_date,due_time,completed_at FROM sb2_tasks
-            WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
-            ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,due_date,due_time,priority
+            SELECT t.id,t.title,t.status,t.priority,t.due_date,t.due_time,t.completed_at,
+                   t.project_id,p.code AS project_code,p.title AS project_title,
+                   t.case_id,c.code AS case_code,c.title AS case_title
+            FROM sb2_tasks t
+            LEFT JOIN sb2_projects p ON p.id=t.project_id
+            LEFT JOIN sb2_cases c ON c.id=t.case_id
+            WHERE t.user_id=:uid AND t.status NOT IN ('completed','cancelled')
+            ORDER BY CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,t.due_date,t.due_time,t.priority
         """), {"uid": self.user_id()}))
 
     def create_task(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -103,6 +108,21 @@ class Repository:
         self.log(uid, "task", task_id, "create", None, data)
         self.session.commit()
         return {"id": task_id, **data}
+
+    def create_tasks(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        uid = self.user_id()
+        created: list[dict[str, Any]] = []
+        for data in items:
+            task_id = self.session.execute(text("""
+                INSERT INTO sb2_tasks(user_id,project_id,case_id,author_profile_id,book_id,title,status,priority,due_date,due_time)
+                VALUES(:uid,:project_id,:case_id,:author_profile_id,:book_id,:title,
+                       CASE WHEN :due_date IS NULL THEN 'open' ELSE 'planned' END,:priority,:due_date,:due_time)
+                RETURNING id
+            """), {"uid": uid, **data}).scalar_one()
+            self.log(uid, "task", task_id, "create", None, data)
+            created.append({"id": task_id, **data})
+        self.session.commit()
+        return created
 
     def complete_task(self, task_id: UUID) -> None:
         uid = self.user_id()
@@ -119,20 +139,24 @@ class Repository:
     def list_events(self, start: date, end: date) -> list[dict[str, Any]]:
         self.apply_calendar_rules()
         return rows(self.session.execute(text("""
-            SELECT id,title,event_date,start_time,end_time,location,status,event_type
-            FROM sb2_events
-            WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
-              AND event_date BETWEEN :start AND :end
-            ORDER BY event_date,start_time,title
+            SELECT e.id,e.title,e.event_date,e.start_time,e.end_time,e.location,e.status,e.event_type,
+                   e.project_id,p.code AS project_code,p.title AS project_title,
+                   e.case_id,c.code AS case_code,c.title AS case_title
+            FROM sb2_events e
+            LEFT JOIN sb2_projects p ON p.id=e.project_id
+            LEFT JOIN sb2_cases c ON c.id=e.case_id
+            WHERE e.user_id=:uid AND e.status NOT IN ('completed','cancelled')
+              AND e.event_date BETWEEN :start AND :end
+            ORDER BY e.event_date,e.start_time,e.title
         """), {"uid": self.user_id(), "start": start, "end": end}))
 
     def create_event(self, data: dict[str, Any]) -> dict[str, Any]:
         uid = self.user_id()
         event_id = self.session.execute(text("""
-            INSERT INTO sb2_events(user_id,author_profile_id,book_id,title,event_date,start_time,end_time,location,event_type)
-            VALUES(:uid,:author_profile_id,:book_id,:title,:event_date,:start_time,:end_time,:location,:event_type)
+            INSERT INTO sb2_events(user_id,project_id,case_id,author_profile_id,book_id,title,event_date,start_time,end_time,location,event_type)
+            VALUES(:uid,:project_id,:case_id,:author_profile_id,:book_id,:title,:event_date,:start_time,:end_time,:location,:event_type)
             RETURNING id
-        """), {"uid": uid, **data}).scalar_one()
+        """), {"uid": uid, "project_id": data.get("project_id"), "case_id": data.get("case_id"), **data}).scalar_one()
         self.log(uid, "event", event_id, "create", None, data)
         self.session.commit()
         return {"id": event_id, **data}
@@ -142,10 +166,10 @@ class Repository:
         created: list[dict[str, Any]] = []
         for data in items:
             event_id = self.session.execute(text("""
-                INSERT INTO sb2_events(user_id,author_profile_id,book_id,title,event_date,start_time,end_time,location,event_type)
-                VALUES(:uid,:author_profile_id,:book_id,:title,:event_date,:start_time,:end_time,:location,:event_type)
+                INSERT INTO sb2_events(user_id,project_id,case_id,author_profile_id,book_id,title,event_date,start_time,end_time,location,event_type)
+                VALUES(:uid,:project_id,:case_id,:author_profile_id,:book_id,:title,:event_date,:start_time,:end_time,:location,:event_type)
                 RETURNING id
-            """), {"uid": uid, **data}).scalar_one()
+            """), {"uid": uid, "project_id": data.get("project_id"), "case_id": data.get("case_id"), **data}).scalar_one()
             self.log(uid, "event", event_id, "create", None, data)
             created.append({"id": event_id, **data})
         self.session.commit()
@@ -161,13 +185,58 @@ class Repository:
             raise KeyError("Evento non trovato")
         self.session.execute(text("""
             UPDATE sb2_events SET title=:title,event_date=:event_date,start_time=:start_time,end_time=:end_time,
-              location=:location,event_type=:event_type,author_profile_id=:author_profile_id,
+              location=:location,event_type=:event_type,project_id=:project_id,case_id=:case_id,author_profile_id=:author_profile_id,
               book_id=:book_id,updated_at=CURRENT_TIMESTAMP
             WHERE id=:id AND user_id=:uid
         """), {"id": event_id, "uid": uid, **data})
         self.log(uid, "event", event_id, "update", dict(before), data)
         self.session.commit()
         return {"id": event_id, **data, "status": before["status"]}
+
+    def assign_context(self, item_kind: str, item_id: UUID, project_id: UUID | None, case_id: UUID | None) -> dict[str, Any]:
+        uid = self.user_id()
+        if project_id is not None and case_id is not None:
+            raise KeyError("Selezionare un progetto oppure una pratica, non entrambi")
+        if project_id is not None:
+            project = self.session.execute(text("""
+                SELECT id,code,title FROM sb2_projects WHERE id=:project_id AND user_id=:uid
+            """), {"project_id": project_id, "uid": uid}).mappings().one_or_none()
+            if project is None:
+                raise KeyError("Progetto non trovato")
+        else:
+            project = None
+        if case_id is not None:
+            case = self.session.execute(text("""
+                SELECT id,code,title FROM sb2_cases WHERE id=:case_id AND user_id=:uid
+            """), {"case_id": case_id, "uid": uid}).mappings().one_or_none()
+            if case is None:
+                raise KeyError("Pratica non trovata")
+        else:
+            case = None
+        table = "sb2_tasks" if item_kind == "task" else "sb2_events" if item_kind == "event" else None
+        if table is None:
+            raise KeyError("Tipo elemento non valido")
+        before = self.session.execute(
+            text(f"SELECT * FROM {table} WHERE id=:id AND user_id=:uid"),
+            {"id": item_id, "uid": uid},
+        ).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Elemento non trovato")
+        self.session.execute(
+            text(f"UPDATE {table} SET project_id=:project_id,case_id=:case_id,updated_at=CURRENT_TIMESTAMP WHERE id=:id AND user_id=:uid"),
+            {"project_id": project_id, "case_id": case_id, "id": item_id, "uid": uid},
+        )
+        self.log(uid, item_kind, item_id, "assign_context", dict(before), {"project_id": project_id, "case_id": case_id})
+        self.session.commit()
+        return {
+            "id": item_id,
+            "project_id": project_id,
+            "project_code": project["code"] if project else None,
+            "project_title": project["title"] if project else None,
+            "case_id": case_id,
+            "case_code": case["code"] if case else None,
+            "case_title": case["title"] if case else None,
+        }
 
     def complete_event(self, event_id: UUID) -> None:
         self._set_event_status(event_id, "completed", "complete")
@@ -242,6 +311,11 @@ class Repository:
                 WHERE user_id=:uid AND project_id=:project_id AND status NOT IN ('completed','cancelled')
                 ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,due_date,due_time,priority
             """), {"uid": self.user_id(), "project_id": item["id"]}))
+            item["events"] = rows(self.session.execute(text("""
+                SELECT id,title,status,event_date,start_time,end_time,location,event_type FROM sb2_events
+                WHERE user_id=:uid AND project_id=:project_id AND status NOT IN ('completed','cancelled')
+                ORDER BY event_date,start_time,title
+            """), {"uid": self.user_id(), "project_id": item["id"]}))
         return items
 
     def project_id_by_code(self, code: str | None) -> UUID | None:
@@ -251,8 +325,29 @@ class Repository:
             SELECT id FROM sb2_projects WHERE user_id=:uid AND UPPER(code)=UPPER(:code)
         """), {"uid": self.user_id(), "code": code.strip()}).scalar_one_or_none()
 
+    def case_id_by_code(self, code: str | None) -> UUID | None:
+        if not code:
+            return None
+        return self.session.execute(text("""
+            SELECT id FROM sb2_cases
+            WHERE user_id=:uid AND (UPPER(code)=UPPER(:code) OR UPPER(title)=UPPER(:code))
+            LIMIT 1
+        """), {"uid": self.user_id(), "code": code.strip()}).scalar_one_or_none()
+
     def cases(self) -> list[dict[str, Any]]:
-        return rows(self.session.execute(text("SELECT id,code,title,status,context_markdown FROM sb2_cases WHERE user_id=:uid ORDER BY title"), {"uid": self.user_id()}))
+        items = rows(self.session.execute(text("SELECT id,code,title,status,context_markdown FROM sb2_cases WHERE user_id=:uid ORDER BY title"), {"uid": self.user_id()}))
+        for item in items:
+            item["tasks"] = rows(self.session.execute(text("""
+                SELECT id,title,status,priority,due_date,due_time FROM sb2_tasks
+                WHERE user_id=:uid AND case_id=:case_id AND status NOT IN ('completed','cancelled')
+                ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,due_date,due_time,priority
+            """), {"uid": self.user_id(), "case_id": item["id"]}))
+            item["events"] = rows(self.session.execute(text("""
+                SELECT id,title,status,event_date,start_time,end_time,location,event_type FROM sb2_events
+                WHERE user_id=:uid AND case_id=:case_id AND status NOT IN ('completed','cancelled')
+                ORDER BY event_date,start_time,title
+            """), {"uid": self.user_id(), "case_id": item["id"]}))
+        return items
 
     def add_sale(self, data: dict[str, Any]) -> dict[str, Any]:
         uid = self.user_id()

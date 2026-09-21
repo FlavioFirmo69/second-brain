@@ -23,8 +23,15 @@ class EventCreate(BaseModel):
     end_time: time | None = None
     location: str | None = Field(default=None, max_length=500)
     event_type: str = Field(default="personal", max_length=40)
+    project_id: UUID | None = None
+    case_id: UUID | None = None
     author_profile_id: UUID | None = None
     book_id: UUID | None = None
+
+
+class ProjectAssignment(BaseModel):
+    project_id: UUID | None = None
+    case_id: UUID | None = None
 
 
 class InboxCreate(BaseModel):
