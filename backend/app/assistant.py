@@ -195,13 +195,23 @@ Non creare vendite o movimenti finanziari. Se la richiesta è ambigua usa respon
         def linked_ids(project_code: str | None, case_code: str | None) -> tuple:
             if project_code and case_code:
                 raise ValueError("Progetto e pratica non possono essere assegnati insieme")
-            project_id = repo.project_id_by_code(project_code)
-            case_id = repo.case_id_by_code(case_code)
-            if project_code and project_id is None:
-                raise ValueError(f"Progetto sconosciuto: {project_code}")
-            if case_code and case_id is None:
-                raise ValueError(f"Pratica sconosciuta: {case_code}")
-            return project_id, case_id
+            if project_code:
+                project_id = repo.project_id_by_code(project_code)
+                if project_id is not None:
+                    return project_id, None
+                case_id = repo.case_id_by_code(project_code)
+                if case_id is not None:
+                    return None, case_id
+                raise ValueError(f"Progetto o pratica sconosciuti: {project_code}")
+            if case_code:
+                case_id = repo.case_id_by_code(case_code)
+                if case_id is not None:
+                    return None, case_id
+                project_id = repo.project_id_by_code(case_code)
+                if project_id is not None:
+                    return project_id, None
+                raise ValueError(f"Pratica o progetto sconosciuti: {case_code}")
+            return None, None
         if action == "create_event":
             project_id, case_id = linked_ids(payload.get("project_code"), payload.get("case_code"))
             event_date = date.fromisoformat(payload["event_date"])
