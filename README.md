@@ -1,6 +1,8 @@
 # Second Brain
 
-Applicazione personale con frontend React, API FastAPI e SQL Server come fonte ufficiale. La prima versione gira sul PC e usa un database SQL Server già esistente. Ogni oggetto creato nel database usa il prefisso `sb2_`.
+Applicazione personale con frontend React, API FastAPI e PostgreSQL/Supabase. Ogni oggetto applicativo nel database usa il prefisso `sb2_`.
+
+Per il passaggio da SQL Server a Supabase e la pubblicazione su Vercel vedere **`README_SUPABASE.md`**.
 
 ## Funzioni incluse
 
@@ -23,23 +25,17 @@ Applicazione personale con frontend React, API FastAPI e SQL Server come fonte u
 
 - Python 3.12 o successivo;
 - Node.js 20 o successivo;
-- Microsoft ODBC Driver 18 for SQL Server;
-- accesso al database SQL Server esistente;
-- un account SQL dedicato con permessi sulle sole tabelle `sb2_`.
+- progetto Supabase con le 19 tabelle `sb2_`;
+- stringa Shared pooler Supabase;
+- Microsoft ODBC Driver 17/18 e accesso al vecchio SQL Server soltanto per la migrazione iniziale.
 
-## 1. Preparare il database
+## 1. Preparare Supabase
 
-Aprire SQL Server Management Studio, selezionare esplicitamente il database esistente e, nell’ordine, eseguire:
+Aprire il SQL Editor di Supabase ed eseguire:
 
-1. `database/001_create_sb2_tables.sql`
-2. `database/002_seed_initial_data.sql`
-3. `database/004_add_llm_conversations.sql`
+1. `database/005_create_supabase_tables.sql`
 
-Il primo script non contiene `CREATE DATABASE` e non opera su tabelle senza prefisso `sb2_`. Il seed è rieseguibile e inserisce lo stato iniziale soltanto quando assente.
-
-`database/003_create_login_example.sql` è un esempio commentato: adattarlo alla policy del server. Non assegnare `db_owner` all’applicazione.
-
-Lo script `004` è idempotente e aggiunge soltanto le tabelle `sb2_conversations` e `sb2_messages`; non crea utenti o login SQL.
+Lo script è rieseguibile, non elimina dati e abilita RLS senza policy pubbliche.
 
 ## 2. Installare il progetto
 
@@ -53,15 +49,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 Modificare quindi `backend/.env`:
 
 ```env
-DB_SERVER=server.example.com,1433
-DB_NAME=NomeDatabaseEsistente
-DB_USER=second_brain_app
-DB_PASSWORD=...
-DB_ENCRYPT=yes
-DB_TRUST_SERVER_CERTIFICATE=no
+DATABASE_URL=postgresql://postgres.PROJECT:PASSWORD@HOST:6543/postgres?sslmode=require
 ```
 
-Se il certificato del server non è verificabile, correggere la configurazione TLS del server. Usare `DB_TRUST_SERVER_CERTIFICATE=yes` soltanto come test temporaneo.
+La stringa deve essere quella **Shared pooler** di Supabase e non deve essere pubblicata su GitHub.
 
 ## 3. Avviare
 
@@ -100,7 +91,7 @@ Aprire **Impostazioni → Profili autoriali**. Ogni salvataggio:
 3. aggiorna il profilo attivo;
 4. registra la modifica nel change log.
 
-I file in `config/defaults` documentano i valori iniziali; dopo il seed, la fonte ufficiale è SQL Server.
+I file in `config/defaults` documentano i valori iniziali; la fonte ufficiale è Supabase.
 
 ## Esportazione Markdown
 
@@ -121,4 +112,4 @@ Set-Location backend
 
 ## Passaggio futuro al cellulare
 
-Il frontend è già responsive. Per usarlo dal telefono sarà sufficiente distribuire API e build del frontend online e aggiungere autenticazione. Nessun accesso diretto a SQL Server verrà mai inserito nel browser.
+Il frontend è responsive. Database e chiavi restano accessibili esclusivamente al backend: nessuna credenziale viene inserita nel browser.

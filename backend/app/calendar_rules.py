@@ -11,24 +11,24 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
     current_time = now.time().replace(microsecond=0)
 
     session.execute(text("""
-        UPDATE dbo.sb2_tasks
-        SET due_date=NULL,status=N'open',updated_at=SYSUTCDATETIME()
-        WHERE user_id=:uid AND status NOT IN (N'completed',N'cancelled')
+        UPDATE sb2_tasks
+        SET due_date=NULL,status='open',updated_at=CURRENT_TIMESTAMP
+        WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND due_date<:today AND due_time IS NULL
     """), {"uid": user_id, "today": today})
 
     session.execute(text("""
-        UPDATE dbo.sb2_tasks
-        SET status=N'completed',completed_at=SYSUTCDATETIME(),updated_at=SYSUTCDATETIME()
-        WHERE user_id=:uid AND status NOT IN (N'completed',N'cancelled')
+        UPDATE sb2_tasks
+        SET status='completed',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+        WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND due_time IS NOT NULL
           AND (due_date<:today OR (due_date=:today AND due_time<:current_time))
     """), {"uid": user_id, "today": today, "current_time": current_time})
 
     session.execute(text("""
-        UPDATE dbo.sb2_events
-        SET status=N'completed',updated_at=SYSUTCDATETIME()
-        WHERE user_id=:uid AND status NOT IN (N'completed',N'cancelled')
+        UPDATE sb2_events
+        SET status='completed',updated_at=CURRENT_TIMESTAMP
+        WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND start_time IS NOT NULL
           AND (event_date<:today OR (event_date=:today AND start_time<:current_time))
     """), {"uid": user_id, "today": today, "current_time": current_time})

@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .config import get_settings
@@ -15,8 +18,8 @@ app.add_middleware(
 )
 app.include_router(router)
 
-
-@app.get("/")
-def root():
-    return {"name": settings.app_name, "docs": "/docs", "health": "/api/health"}
-
+# In locale il frontend continua a essere servito da Vite sulla porta 5173.
+# Durante la build Vercel crea frontend/dist e FastAPI lo pubblica alla radice.
+frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
