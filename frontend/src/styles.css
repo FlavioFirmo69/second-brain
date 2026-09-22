@@ -457,6 +457,24 @@ main {
   color: #7d8390;
   font-size: 13px;
 }
+.system-info {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid #e8e2d9;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.system-info > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 13px;
+  border-bottom: 1px solid #eee9e1;
+}
+.system-info > div:last-child { border-bottom: 0; }
+.system-info dt { color: #7d8390; }
+.system-info dd { margin: 0; font-weight: 700; text-align: right; }
 .calendar-panel {
   padding: 0;
   overflow: hidden;

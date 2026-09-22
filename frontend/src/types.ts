@@ -12,3 +12,4 @@ export type AssistantResult = { mode: string; kind: string; message?: string; da
 export type Conversation = { id: string; title: string; status: string; created_at: string; updated_at: string }
 export type ChatMessage = { id: string; role: 'user'|'assistant'|'system'; content_markdown: string; message_kind: string; metadata?: Record<string, unknown>; created_at: string }
 export type ChatResponse = { conversation_id: string; user_message: ChatMessage; assistant_message: ChatMessage; result: AssistantResult }
+export type SystemInfo = { version: string; environment: string; llm_enabled: boolean; llm_model?: string }

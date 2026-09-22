@@ -10,6 +10,7 @@ from .assistant import answer
 from .database import get_session
 from .repository import Repository
 from .schemas import AssistantRequest, BalanceCreate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, SaleCreate, TaskCreate
+from .version import APP_VERSION
 
 router = APIRouter(prefix="/api")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,16 @@ def health(session: Session = Depends(get_session)):
         return {"status": "ok", "database": "connected"}
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Database non disponibile: {exc.__class__.__name__}") from exc
+
+
+@router.get("/system/info")
+def system_info(repository: Repository = Depends(repo)):
+    return {
+        "version": APP_VERSION,
+        "environment": repository.settings.app_env,
+        "llm_enabled": repository.settings.llm_enabled,
+        "llm_model": repository.settings.llm_model or None,
+    }
 
 
 @router.get("/dashboard/today")
@@ -190,7 +201,7 @@ async def execute_inbox(item_id: UUID, session: Session = Depends(get_session)):
         if item["status"] != "new" or not repository.can_execute_inbox(item["text"]):
             raise HTTPException(status_code=409, detail="Questo comando non può essere eseguito automaticamente")
         result = await answer(session, item["text"])
-        if result.get("kind") not in {"event_created", "events_created", "task_created", "sales"}:
+        if result.get("kind") not in {"event_created", "events_created", "task_created", "tasks_created", "sales"}:
             raise HTTPException(status_code=409, detail="Il comando non ha prodotto un'azione eseguibile")
         repository.complete_inbox(item_id, result)
         return result

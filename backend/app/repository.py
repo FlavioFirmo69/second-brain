@@ -102,7 +102,8 @@ class Repository:
         task_id = self.session.execute(text("""
             INSERT INTO sb2_tasks(user_id,project_id,case_id,author_profile_id,book_id,title,status,priority,due_date,due_time)
             VALUES(:uid,:project_id,:case_id,:author_profile_id,:book_id,:title,
-                   CASE WHEN :due_date IS NULL THEN 'open' ELSE 'planned' END,:priority,:due_date,:due_time)
+                   CASE WHEN CAST(:due_date AS date) IS NULL THEN 'open' ELSE 'planned' END,
+                   :priority,CAST(:due_date AS date),CAST(:due_time AS time))
             RETURNING id
         """), {"uid": uid, **data}).scalar_one()
         self.log(uid, "task", task_id, "create", None, data)
@@ -116,7 +117,8 @@ class Repository:
             task_id = self.session.execute(text("""
                 INSERT INTO sb2_tasks(user_id,project_id,case_id,author_profile_id,book_id,title,status,priority,due_date,due_time)
                 VALUES(:uid,:project_id,:case_id,:author_profile_id,:book_id,:title,
-                       CASE WHEN :due_date IS NULL THEN 'open' ELSE 'planned' END,:priority,:due_date,:due_time)
+                       CASE WHEN CAST(:due_date AS date) IS NULL THEN 'open' ELSE 'planned' END,
+                       :priority,CAST(:due_date AS date),CAST(:due_time AS time))
                 RETURNING id
             """), {"uid": uid, **data}).scalar_one()
             self.log(uid, "task", task_id, "create", None, data)
@@ -442,7 +444,10 @@ class Repository:
         llm_action = re.match(r"^(crea|aggiungi|inserisci|pianifica|programma|segna)\b", command) and any(
             word in command for word in ("evento", "appuntamento", "attività", "todo", "promemoria")
         )
-        return bool(llm_action and self.settings.llm_enabled and self.settings.llm_api_key)
+        context_action = re.match(r"^(pratica|progetto)\b", command) and bool(
+            re.search(r"\b(oggi|domani|lunedi|lunedì|martedi|martedì|mercoledi|mercoledì|giovedi|giovedì|venerdi|venerdì|sabato|domenica)\b", command)
+        )
+        return bool((llm_action or context_action) and self.settings.llm_enabled and self.settings.llm_api_key)
 
     def inbox_item(self, item_id: UUID) -> dict[str, Any]:
         item = self.session.execute(text("SELECT id,source,text,status,created_at FROM sb2_inbox WHERE id=:id AND user_id=:uid"), {"id": item_id, "uid": self.user_id()}).mappings().one_or_none()

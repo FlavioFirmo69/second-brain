@@ -17,6 +17,29 @@ MONTHS = {
     "luglio": 7, "agosto": 8, "settembre": 9, "ottobre": 10, "novembre": 11, "dicembre": 12,
 }
 
+WEEKDAYS = {
+    "lunedi": 0, "lunedì": 0, "martedi": 1, "martedì": 1,
+    "mercoledi": 2, "mercoledì": 2, "giovedi": 3, "giovedì": 3,
+    "venerdi": 4, "venerdì": 4, "sabato": 5, "domenica": 6,
+}
+
+
+def scheduling_hints(value: str, today: date) -> tuple[date | None, time | None]:
+    text_value = normalize(value)
+    hinted_date = None
+    if re.search(r"\boggi\b", text_value):
+        hinted_date = today
+    elif re.search(r"\bdomani\b", text_value):
+        hinted_date = today + timedelta(days=1)
+    else:
+        for name, weekday in WEEKDAYS.items():
+            if re.search(rf"\b{re.escape(name)}\b", text_value):
+                hinted_date = today + timedelta(days=(weekday - today.weekday()) % 7)
+                break
+    time_match = re.search(r"\b(?:alle|ore)\s+(\d{1,2})(?::(\d{2}))?\b", text_value)
+    hinted_time = time(int(time_match.group(1)), int(time_match.group(2) or 0)) if time_match else None
+    return hinted_date, hinted_time
+
 
 def future_date(day: int, month: int, year: int | None, today: date) -> date:
     result = date(year or today.year, month, day)
@@ -249,11 +272,12 @@ Non creare vendite o movimenti finanziari. Se la richiesta è ambigua usa respon
                     "message": f"Creati {len(created)} eventi a calendario."}
         if action == "create_task":
             project_id, case_id = linked_ids(payload.get("project_code"), payload.get("case_code"))
-            due_date = date.fromisoformat(payload["due_date"]) if payload.get("due_date") else None
-            due_time = time.fromisoformat(payload["due_time"]) if payload.get("due_time") else None
+            hinted_date, hinted_time = scheduling_hints(raw_text, repo.today())
+            due_date = hinted_date or (date.fromisoformat(payload["due_date"]) if payload.get("due_date") else None)
+            due_time = hinted_time or (time.fromisoformat(payload["due_time"]) if payload.get("due_time") else None)
             item = repo.create_task({
                 "title": payload["title"], "due_date": due_date,
-                "due_time": due_time, "priority": payload.get("priority", 3),
+                "due_time": due_time, "priority": payload.get("priority") or 3,
                 "project_id": project_id, "case_id": case_id, "author_profile_id": None, "book_id": None,
             })
             return {"mode": "llm", "kind": "task_created", "data": item,
@@ -263,12 +287,15 @@ Non creare vendite o movimenti finanziari. Se la richiesta è ambigua usa respon
             if not source_tasks:
                 raise ValueError("Elenco attività vuoto")
             pending = []
-            for task_data in source_tasks:
+            source_lines = [line.strip(" \t-•") for line in raw_text.splitlines() if line.strip().startswith(("-", "•"))]
+            for index, task_data in enumerate(source_tasks):
                 project_id, case_id = linked_ids(task_data.get("project_code"), task_data.get("case_code"))
+                hint_source = source_lines[index] if len(source_lines) == len(source_tasks) else raw_text
+                hinted_date, hinted_time = scheduling_hints(hint_source, repo.today())
                 pending.append({
                     "title": task_data["title"],
-                    "due_date": date.fromisoformat(task_data["due_date"]) if task_data.get("due_date") else None,
-                    "due_time": time.fromisoformat(task_data["due_time"]) if task_data.get("due_time") else None,
+                    "due_date": hinted_date or (date.fromisoformat(task_data["due_date"]) if task_data.get("due_date") else None),
+                    "due_time": hinted_time or (time.fromisoformat(task_data["due_time"]) if task_data.get("due_time") else None),
                     "priority": task_data.get("priority") or 3,
                     "project_id": project_id,
                     "case_id": case_id,

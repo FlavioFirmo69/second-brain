@@ -6,9 +6,10 @@ from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .config import get_settings
+from .version import APP_VERSION
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="0.1.0")
+app = FastAPI(title=settings.app_name, version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

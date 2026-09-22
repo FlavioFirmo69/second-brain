@@ -7,6 +7,7 @@ Queste regole sono applicate dal backend senza consultare l'LLM. Producono sempr
 - Un'attività scaduta **senza orario** perde la vecchia data e torna nei **TODO senza data**.
 - Un'attività scaduta **con orario** viene contrassegnata come completata e rimossa dalle viste operative.
 - Un evento passato **con orario** viene contrassegnato come completato e rimosso da Oggi e Calendario.
+- Un evento passato **senza orario** viene trasformato in un TODO senza data, conservando l'eventuale collegamento a progetto o pratica; l'evento originale viene chiuso.
 - Gli elementi con stato `completed` o `cancelled` non vengono mostrati nelle viste operative.
 - Il comando **Fatto** chiude immediatamente l'attività o l'evento selezionato.
 - L'eliminazione di un evento usa lo stato `cancelled`: non effettua una cancellazione fisica dal database.
