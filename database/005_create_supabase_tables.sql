@@ -84,6 +84,13 @@ create table if not exists public.sb2_books (
     status varchar(30) not null,
     publication_date date,
     format_notes varchar(500),
+    genre varchar(120),
+    synopsis text,
+    themes text,
+    target_reader text,
+    positioning text,
+    differentiators text,
+    tone_notes text,
     created_at timestamptz(0) not null default now(),
     updated_at timestamptz(0) not null default now()
 );

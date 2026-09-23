@@ -51,14 +51,37 @@ def future_date(day: int, month: int, year: int | None, today: date) -> date:
 async def answer(session: Session, raw_text: str, history: list[dict[str, str]] | None = None) -> dict:
     repo = Repository(session)
     command = normalize(raw_text)
-    if command == "oggi":
+    if command == "oggi" or re.fullmatch(r"(?:cosa|che cosa|quali impegni|cosa devo fare) (?:ho )?oggi\??", command):
         return {"mode": "deterministic", "kind": "dashboard", "data": repo.dashboard()}
-    if command == "settimana":
+    if command == "settimana" or re.fullmatch(r"(?:cosa|che cosa|quali impegni) (?:ho )?(?:questa|nella) settimana\??", command):
         return {"mode": "deterministic", "kind": "week", "data": repo.week()}
     if command in {"saldo", "saldo e movimenti", "movimenti"}:
         return {"mode": "deterministic", "kind": "finance", "data": repo.finance()}
     if command == "comandi":
         return {"mode": "deterministic", "kind": "commands", "data": repo.commands()}
+
+    if re.search(r"\b(?:eventi|spettacoli|appuntamenti)\b.*\bteatr", command):
+        data = repo.search_calendar(start=repo.today(), end=repo.today() + timedelta(days=730), event_type="theatre")
+        data["title"] = "Prossimi eventi del teatro"
+        return {"mode": "deterministic", "kind": "calendar_query", "data": data,
+                "message": f"Ho trovato {len(data['events'])} eventi del teatro."}
+
+    linked = re.search(r"\b(?:attivit[aà]|impegni|eventi)\b.*\b(?:collegat[ei]\s+a|(?:del|della)\s+(?:progetto|pratica))\s+([a-z0-9_-]+)", command)
+    if linked:
+        code = linked.group(1).upper()
+        data = repo.search_calendar(context_code=code)
+        data["title"] = f"Attività collegate a {code}"
+        return {"mode": "deterministic", "kind": "calendar_query", "data": data,
+                "message": f"Ho trovato {len(data['tasks'])} attività e {len(data['events'])} eventi collegati a {code}."}
+
+    when = re.search(r"\bquando\b.*\b(?:devo|ho|c(?:'|’)è|e)\b\s*(?:andare\s+)?(?:dal|dalla|al|alla)?\s*(.+?)\??$", command)
+    if when:
+        keyword = re.sub(r"\b(?:dal|dalla|al|alla)\b", "", when.group(1)).strip()
+        if keyword:
+            data = repo.search_calendar(start=repo.today(), text_filter=keyword)
+            data["title"] = f"Risultati per “{keyword}”"
+            return {"mode": "deterministic", "kind": "calendar_query", "data": data,
+                    "message": f"Ho trovato {len(data['tasks']) + len(data['events'])} risultati."}
     if command.startswith("nota "):
         return {"mode": "deterministic", "kind": "inbox", "data": repo.add_inbox(raw_text[5:].strip(), "assistant")}
     todo = re.fullmatch(r"(?:todo\s*:|todo|aggiungi todo|da fare\s*:?)\s*(.+)", command)

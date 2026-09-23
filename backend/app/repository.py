@@ -152,6 +152,62 @@ class Repository:
             ORDER BY e.event_date,e.start_time,e.title
         """), {"uid": self.user_id(), "start": start, "end": end}))
 
+    def search_calendar(
+        self,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        text_filter: str | None = None,
+        event_type: str | None = None,
+        context_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Read active calendar items using deterministic, database-side filters."""
+        self.apply_calendar_rules()
+        uid = self.user_id()
+        params: dict[str, Any] = {
+            "uid": uid,
+            "start": start,
+            "end": end,
+            "pattern": f"%{(text_filter or '').lower()}%",
+            "event_type": (event_type or "").lower(),
+            "context_code": (context_code or "").upper(),
+        }
+        events = rows(self.session.execute(text("""
+            SELECT e.id,e.title,e.event_date,e.start_time,e.end_time,e.location,e.status,e.event_type,
+                   p.code AS project_code,p.title AS project_title,
+                   c.code AS case_code,c.title AS case_title
+            FROM sb2_events e
+            LEFT JOIN sb2_projects p ON p.id=e.project_id
+            LEFT JOIN sb2_cases c ON c.id=e.case_id
+            WHERE e.user_id=:uid AND e.status NOT IN ('completed','cancelled')
+              AND (CAST(:start AS date) IS NULL OR e.event_date>=CAST(:start AS date))
+              AND (CAST(:end AS date) IS NULL OR e.event_date<=CAST(:end AS date))
+              AND (:event_type='' OR LOWER(COALESCE(e.event_type,''))=:event_type
+                   OR (:event_type='theatre' AND (
+                       LOWER(COALESCE(e.event_type,'')) IN ('teatro','theater')
+                       OR
+                       LOWER(e.title) LIKE '%teatro%' OR LOWER(COALESCE(e.location,'')) LIKE '%teatro%'
+                       OR LOWER(e.title) LIKE '%lirica%' OR LOWER(e.title) LIKE '%balletto%')))
+              AND (:pattern='%%' OR LOWER(e.title) LIKE :pattern OR LOWER(COALESCE(e.location,'')) LIKE :pattern)
+              AND (:context_code='' OR UPPER(COALESCE(p.code,''))=:context_code OR UPPER(COALESCE(c.code,''))=:context_code)
+            ORDER BY e.event_date,e.start_time,e.title
+        """), params))
+        tasks = rows(self.session.execute(text("""
+            SELECT t.id,t.title,t.status,t.priority,t.due_date,t.due_time,
+                   p.code AS project_code,p.title AS project_title,
+                   c.code AS case_code,c.title AS case_title
+            FROM sb2_tasks t
+            LEFT JOIN sb2_projects p ON p.id=t.project_id
+            LEFT JOIN sb2_cases c ON c.id=t.case_id
+            WHERE t.user_id=:uid AND t.status NOT IN ('completed','cancelled')
+              AND (CAST(:start AS date) IS NULL OR t.due_date>=CAST(:start AS date))
+              AND (CAST(:end AS date) IS NULL OR t.due_date<=CAST(:end AS date))
+              AND (:pattern='%%' OR LOWER(t.title) LIKE :pattern)
+              AND (:context_code='' OR UPPER(COALESCE(p.code,''))=:context_code OR UPPER(COALESCE(c.code,''))=:context_code)
+            ORDER BY CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,t.due_date,t.due_time,t.priority
+        """), params))
+        return {"events": events, "tasks": tasks}
+
     def create_event(self, data: dict[str, Any]) -> dict[str, Any]:
         uid = self.user_id()
         event_id = self.session.execute(text("""
@@ -298,6 +354,67 @@ class Repository:
             WHERE s.user_id=:uid AND s.status='active' ORDER BY s.title
         """), {"uid": self.user_id()}))
 
+    def books(self) -> list[dict[str, Any]]:
+        uid = self.user_id()
+        items = rows(self.session.execute(text("""
+            SELECT b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
+                   b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
+                   a.code AS author_code,a.display_name AS author_name,
+                   COALESCE(SUM(s.quantity),0) AS sold,
+                   t.target_value,t.target_date
+            FROM sb2_books b
+            JOIN sb2_author_profiles a ON a.id=b.author_profile_id
+            LEFT JOIN sb2_sales s ON s.book_id=b.id
+            LEFT JOIN LATERAL (
+                SELECT target_value,target_date FROM sb2_targets x
+                WHERE x.book_id=b.id AND x.metric_code='copies_sold'
+                ORDER BY target_date LIMIT 1
+            ) t ON true
+            WHERE a.user_id=:uid
+            GROUP BY b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
+                     b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
+                     a.code,a.display_name,t.target_value,t.target_date
+            ORDER BY b.title
+        """), {"uid": uid}))
+        for item in items:
+            item["projects"] = rows(self.session.execute(text("""
+                SELECT id,code,title,status,objective FROM sb2_projects
+                WHERE user_id=:uid AND book_id=:book_id ORDER BY title
+            """), {"uid": uid, "book_id": item["id"]}))
+            item["strategies"] = rows(self.session.execute(text("""
+                SELECT id,code,title,status,version_number FROM sb2_strategies
+                WHERE user_id=:uid AND book_id=:book_id ORDER BY title
+            """), {"uid": uid, "book_id": item["id"]}))
+        return items
+
+    def update_book(self, book_id: UUID, data: dict[str, Any]) -> dict[str, Any]:
+        uid = self.user_id()
+        before = self.session.execute(text("""
+            SELECT b.* FROM sb2_books b JOIN sb2_author_profiles a ON a.id=b.author_profile_id
+            WHERE b.id=:id AND a.user_id=:uid
+        """), {"id": book_id, "uid": uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Libro non trovato")
+        author_id = self.session.execute(text("""
+            SELECT id FROM sb2_author_profiles WHERE user_id=:uid AND UPPER(code)=UPPER(:code) AND is_active=true
+        """), {"uid": uid, "code": data["author_code"]}).scalar_one_or_none()
+        if author_id is None:
+            raise KeyError("Profilo autore non trovato")
+        self.session.execute(text("""
+            UPDATE sb2_books SET author_profile_id=:author_id,title=:title,status=:status,
+              publication_date=:publication_date,format_notes=:format_notes,genre=:genre,
+              synopsis=:synopsis,themes=:themes,target_reader=:target_reader,positioning=:positioning,
+              differentiators=:differentiators,tone_notes=:tone_notes,updated_at=CURRENT_TIMESTAMP
+            WHERE id=:id
+        """), {"id": book_id, "author_id": author_id, **data})
+        self.session.execute(text("""
+            UPDATE sb2_projects SET author_profile_id=:author_id,title=:title,updated_at=CURRENT_TIMESTAMP
+            WHERE user_id=:uid AND book_id=:id
+        """), {"uid": uid, "id": book_id, "author_id": author_id, "title": data["title"]})
+        self.log(uid, "book", book_id, "update", dict(before), data)
+        self.session.commit()
+        return {"id": book_id, "code": before["code"], **data}
+
     def projects(self) -> list[dict[str, Any]]:
         items = rows(self.session.execute(text("""
             SELECT p.id,p.code,p.title,p.status,p.objective,p.notes_markdown,
@@ -319,6 +436,40 @@ class Repository:
                 ORDER BY event_date,start_time,title
             """), {"uid": self.user_id(), "project_id": item["id"]}))
         return items
+
+    def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
+        uid = self.user_id()
+        code = data["code"].strip().upper()
+        exists = self.session.execute(text("SELECT 1 FROM sb2_projects WHERE user_id=:uid AND UPPER(code)=:code"), {"uid": uid, "code": code}).scalar_one_or_none()
+        if exists:
+            raise ValueError(f"Esiste già un progetto con codice {code}")
+        author_id = None
+        if data.get("author_code"):
+            author_id = self.session.execute(text("""
+                SELECT id FROM sb2_author_profiles WHERE user_id=:uid AND UPPER(code)=UPPER(:code) AND is_active=true
+            """), {"uid": uid, "code": data["author_code"]}).scalar_one_or_none()
+            if author_id is None:
+                raise KeyError("Profilo autore non trovato")
+        book_id = None
+        if data["kind"] == "book":
+            if author_id is None:
+                raise ValueError("Per un libro è necessario selezionare l'autore")
+            duplicate = self.session.execute(text("SELECT 1 FROM sb2_books WHERE UPPER(code)=:code"), {"code": code}).scalar_one_or_none()
+            if duplicate:
+                raise ValueError(f"Esiste già un libro con codice {code}")
+            book_id = self.session.execute(text("""
+                INSERT INTO sb2_books(author_profile_id,code,title,status,publication_date)
+                VALUES(:author_id,:code,:title,'draft',:publication_date)
+                RETURNING id
+            """), {"author_id": author_id, "code": code, "title": data["title"], "publication_date": data.get("publication_date")}).scalar_one()
+        project_id = self.session.execute(text("""
+            INSERT INTO sb2_projects(user_id,author_profile_id,book_id,code,title,status,objective,notes_markdown)
+            VALUES(:uid,:author_id,:book_id,:code,:title,'active',:objective,'')
+            RETURNING id
+        """), {"uid": uid, "author_id": author_id, "book_id": book_id, "code": code, "title": data["title"], "objective": data.get("objective")}).scalar_one()
+        self.log(uid, "project", project_id, "create", None, {**data, "code": code, "book_id": book_id})
+        self.session.commit()
+        return {"id": project_id, "book_id": book_id, "code": code, "title": data["title"], "status": "active"}
 
     def project_id_by_code(self, code: str | None) -> UUID | None:
         if not code:
@@ -425,6 +576,22 @@ class Repository:
         self.log(uid, "balance_check", check_id, "create", None, {**data, "reconciliation": reconciliation})
         self.session.commit()
         return {"id": check_id, "reconciliation_amount": reconciliation, **data}
+
+    def create_transaction(self, data: dict[str, Any]) -> dict[str, Any]:
+        uid = self.user_id()
+        account_id = self.session.execute(text("""
+            SELECT id FROM sb2_accounts WHERE user_id=:uid AND code=:code AND is_active=true
+        """), {"uid": uid, "code": data["account_code"]}).scalar_one_or_none()
+        if account_id is None:
+            raise KeyError("Conto non trovato")
+        transaction_id = self.session.execute(text("""
+            INSERT INTO sb2_transactions(user_id,account_id,transaction_date,description,amount,status,is_recurring)
+            VALUES(:uid,:account,:transaction_date,:description,:amount,'planned',false)
+            RETURNING id
+        """), {"uid": uid, "account": account_id, **data}).scalar_one()
+        self.log(uid, "transaction", transaction_id, "create", None, data)
+        self.session.commit()
+        return {"id": transaction_id, "status": "planned", **data}
 
     def inbox(self) -> list[dict[str, Any]]:
         items = rows(self.session.execute(text("SELECT id,source,text,status,created_at,processed_at FROM sb2_inbox WHERE user_id=:uid AND status<>'cancelled' ORDER BY created_at DESC"), {"uid": self.user_id()}))

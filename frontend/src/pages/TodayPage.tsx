@@ -1,36 +1,41 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api, post } from '../api'
 import { Panel } from '../components/Panel'
+import { formatDate } from '../date'
 import type { Dashboard, EventItem, Task } from '../types'
+
+type WeekData={start:string;end:string;tasks:Task[];events:EventItem[]}
+type AgendaItem={id:string;kind:'event'|'task';date?:string;time?:string;title:string;detail?:string;source:EventItem|Task}
+
+function asItems(events:EventItem[],tasks:Task[]):AgendaItem[]{
+  return [...events.map(item=>({id:item.id,kind:'event' as const,date:item.event_date,time:item.start_time?.slice(0,5),title:item.title,detail:item.location,source:item})),...tasks.map(item=>({id:item.id,kind:'task' as const,date:item.due_date,time:item.due_time?.slice(0,5),title:item.title,detail:item.project_title||item.case_title,source:item}))].sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(a.time||'99:99').localeCompare(b.time||'99:99')||a.title.localeCompare(b.title))
+}
 
 export function TodayPage() {
   const [data, setData] = useState<Dashboard | null>(null)
+  const [week,setWeek]=useState<WeekData|null>(null)
   const [message, setMessage] = useState('')
-  const load = () => api<Dashboard>('/dashboard/today').then(setData).catch(e => setMessage(e.message))
+  const load=()=>Promise.all([api<Dashboard>('/dashboard/today'),api<WeekData>('/dashboard/week')]).then(([day,weekData])=>{setData(day);setWeek(weekData)}).catch(e=>setMessage(e.message))
   useEffect(() => { void load() }, [])
 
-  async function complete(task: Task) {
-    await post(`/tasks/${task.id}/complete`)
-    load()
-  }
-  async function completeEvent(event: EventItem) {
-    await post(`/events/${event.id}/complete`)
-    setMessage(`Evento completato: ${event.title}`)
-    load()
-  }
-  return <div className="stack">
+  const todayItems=useMemo(()=>data?asItems(data.events,data.tasks.filter(item=>Boolean(item.due_date))):[],[data])
+  const laterItems=useMemo(()=>data&&week?asItems(week.events.filter(item=>item.event_date>data.date),week.tasks.filter(item=>Boolean(item.due_date)&&item.due_date!>data.date)):[],[data,week])
+  const todos=useMemo(()=>week?.tasks.filter(item=>!item.due_date)||data?.tasks.filter(item=>!item.due_date)||[],[data,week])
+  const laterDays=[...new Set(laterItems.map(item=>item.date).filter(Boolean))] as string[]
+
+  async function complete(item:AgendaItem){await post(`/${item.kind==='event'?'events':'tasks'}/${item.id}/complete`);setMessage(`Completato: ${item.title}`);await load()}
+  const row=(item:AgendaItem)=><article key={`${item.kind}-${item.id}`} className="row today-row"><time>{item.time||'—'}</time><div><strong>{item.title}</strong>{item.detail&&<small>{item.detail}</small>}</div><button className="done-icon" onClick={()=>void complete(item)} title="Segna come fatto" aria-label={`Segna come fatto ${item.title}`}>✓</button></article>
+
+  return <div className="stack today-page">
     <Panel title="Oggi">
       {message && <p className="notice">{message}</p>}
-      {!data ? <p>Caricamento…</p> : <>
-        {data.events.length === 0 && data.tasks.filter(t => t.due_date).length === 0 && <p>Nessuna attività pianificata.</p>}
-        <div className="list">
-          {data.events.map(item => <article key={item.id} className="row"><time>{item.start_time?.slice(0,5) || 'Tutto il giorno'}</time><div><strong>{item.title}</strong>{item.location && <small>{item.location}</small>}</div><button onClick={() => completeEvent(item)}>Fatto</button></article>)}
-          {data.tasks.filter(t => t.due_date).map(item => <article key={item.id} className="row"><time>{item.due_time?.slice(0,5) || 'Oggi'}</time><div><strong>{item.title}</strong></div><button onClick={() => complete(item)}>Fatto</button></article>)}
-        </div>
-      </>}
+      {!data?<p>Caricamento…</p>:<div className="list compact">{todayItems.length?todayItems.map(row):<p className="empty-state compact-empty">Nessuna attività pianificata.</p>}</div>}
     </Panel>
-    <Panel title="TODO senza data">
-      <div className="list compact">{data?.tasks.filter(t => !t.due_date).map(item => <article className="row" key={item.id}><div><strong>{item.title}</strong></div><button onClick={() => complete(item)}>Fatto</button></article>)}</div>
+    <Panel title="Resto della settimana">
+      {!week?<p>Caricamento…</p>:laterDays.length?<div className="week-sections">{laterDays.map(day=><section key={day}><h3>{new Date(`${day}T12:00:00`).toLocaleDateString('it-IT',{weekday:'long',day:'2-digit',month:'2-digit'})}</h3><div className="list compact">{laterItems.filter(item=>item.date===day).map(row)}</div></section>)}</div>:<p className="empty-state compact-empty">Nessun altro impegno questa settimana.</p>}
+    </Panel>
+    <Panel title="TODO">
+      <div className="list compact">{todos.length?todos.map(item=>row({id:item.id,kind:'task',title:item.title,detail:item.project_title||item.case_title,source:item})):<p className="empty-state compact-empty">Nessun TODO aperto.</p>}</div>
     </Panel>
   </div>
 }

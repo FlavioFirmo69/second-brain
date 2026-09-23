@@ -85,6 +85,15 @@ export function AssistantPage() {
       const data=result.data as {start:string;end:string;tasks:Task[];events:EventItem[]}
       return <div className="assistant-result"><header><span>Settimana</span><strong>{formatDate(data.start)} – {formatDate(data.end)}</strong></header><div className="assistant-agenda">{data.events?.map(item=><AgendaRow key={item.id} time={`${formatDate(item.event_date)} · ${item.start_time?.slice(0,5)||'—'}${item.end_time?`–${item.end_time.slice(0,5)}`:''}`} title={item.title} onDone={()=>void completeCalendarItem(message.id,'event',item.id)}/>)}{data.tasks?.map(item=><AgendaRow key={item.id} time={item.due_date?formatDate(item.due_date):'TODO'} title={item.title} onDone={()=>void completeCalendarItem(message.id,'task',item.id)}/>)}</div></div>
     }
+    if(result.kind==='calendar_query') {
+      const data=result.data as {title?:string;tasks:Task[];events:EventItem[]}
+      const total=(data.events?.length||0)+(data.tasks?.length||0)
+      return <div className="assistant-result"><header><span>{data.title||'Calendario'}</span><strong>{total} risultat{total===1?'o':'i'}</strong></header><div className="assistant-agenda">
+        {data.events?.map(item=><AgendaRow key={`event-${item.id}`} time={`${formatDate(item.event_date)} · ${item.start_time?.slice(0,5)||'Tutto il giorno'}${item.end_time?`–${item.end_time.slice(0,5)}`:''}`} title={item.title} detail={[item.location,item.project_title||item.case_title].filter(Boolean).join(' · ')} onDone={()=>void completeCalendarItem(message.id,'event',item.id)}/>)}
+        {data.tasks?.map(item=><AgendaRow key={`task-${item.id}`} time={item.due_date?`${formatDate(item.due_date)}${item.due_time?` · ${item.due_time.slice(0,5)}`:''}`:'TODO'} title={item.title} detail={item.project_title||item.case_title} onDone={()=>void completeCalendarItem(message.id,'task',item.id)}/>)}
+        {total===0&&<p className="empty-result">Nessun elemento trovato.</p>}
+      </div></div>
+    }
     if(result.kind==='finance') {
       const data=result.data as unknown as Finance
       return <div className="assistant-result"><header><span>Saldo</span><strong>{data.balance?`${Number(data.balance.balance).toLocaleString('it-IT',{style:'currency',currency:'EUR'})}`:'Non disponibile'}</strong></header><div className="assistant-agenda">{data.planned?.map(item=><AgendaRow key={item.id} time={formatDate(item.transaction_date)} title={item.description} detail={Number(item.amount).toLocaleString('it-IT',{style:'currency',currency:'EUR'})}/>)}</div></div>

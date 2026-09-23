@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .assistant import answer
 from .database import get_session
 from .repository import Repository
-from .schemas import AssistantRequest, BalanceCreate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, SaleCreate, TaskCreate
+from .schemas import AssistantRequest, BalanceCreate, BookUpdate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, ProjectCreate, SaleCreate, TaskCreate, TransactionCreate
 from .version import APP_VERSION
 
 router = APIRouter(prefix="/api")
@@ -139,9 +139,32 @@ def strategies(repository: Repository = Depends(repo)):
     return repository.strategies()
 
 
+@router.get("/books")
+def books(repository: Repository = Depends(repo)):
+    return repository.books()
+
+
+@router.put("/books/{book_id}")
+def update_book(book_id: UUID, payload: BookUpdate, repository: Repository = Depends(repo)):
+    try:
+        return repository.update_book(book_id, payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/projects")
 def projects(repository: Repository = Depends(repo)):
     return repository.projects()
+
+
+@router.post("/projects", status_code=status.HTTP_201_CREATED)
+def create_project(payload: ProjectCreate, repository: Repository = Depends(repo)):
+    try:
+        return repository.create_project(payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/cases")
@@ -171,6 +194,14 @@ def finance(repository: Repository = Depends(repo)):
 def set_balance(payload: BalanceCreate, repository: Repository = Depends(repo)):
     try:
         return repository.set_balance(payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/finance/transactions", status_code=status.HTTP_201_CREATED)
+def create_transaction(payload: TransactionCreate, repository: Repository = Depends(repo)):
+    try:
+        return repository.create_transaction(payload.model_dump())
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -256,6 +287,7 @@ async def create_conversation_message(conversation_id: UUID, payload: AssistantR
             "week": "Ecco gli impegni della settimana.",
             "finance": "Ecco il saldo e i movimenti pianificati.",
             "commands": "Ecco i comandi disponibili.",
+            "calendar_query": "Ecco i risultati trovati nel calendario.",
         }
         content = data.get("content_markdown") if result.get("kind") == "article" else result.get("message") or data.get("text") or summaries.get(result.get("kind"), "Richiesta elaborata.")
         metadata = data if result.get("kind") == "article" else {"result": result}

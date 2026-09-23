@@ -54,6 +54,37 @@ class BalanceCreate(BaseModel):
     notes: str | None = None
 
 
+class TransactionCreate(BaseModel):
+    account_code: str = "ING_CURRENT"
+    transaction_date: date
+    description: str = Field(min_length=1, max_length=500)
+    amount: Decimal
+
+
+class ProjectCreate(BaseModel):
+    code: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    title: str = Field(min_length=1, max_length=250)
+    objective: str | None = None
+    kind: str = Field(default="project", pattern=r"^(project|book)$")
+    author_code: str | None = None
+    publication_date: date | None = None
+
+
+class BookUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    author_code: str
+    status: str = Field(min_length=1, max_length=30)
+    publication_date: date | None = None
+    format_notes: str | None = Field(default=None, max_length=500)
+    genre: str | None = Field(default=None, max_length=120)
+    synopsis: str | None = None
+    themes: str | None = None
+    target_reader: str | None = None
+    positioning: str | None = None
+    differentiators: str | None = None
+    tone_notes: str | None = None
+
+
 class ProfileUpdate(BaseModel):
     positioning: str
     voice_markdown: str

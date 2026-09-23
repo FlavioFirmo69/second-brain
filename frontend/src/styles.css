@@ -198,6 +198,17 @@ main {
 .compact .row {
   min-height: 44px;
 }
+.today-page { gap: 14px; }
+.today-page .panel { padding: 17px 20px; }
+.today-page .panel > header { margin-bottom: 8px; }
+.today-page .panel h2 { font-size: 19px; }
+.today-row { min-height: 42px; padding: 7px 2px; font-size: 13px; }
+.today-row time { min-width: 72px; display: grid; gap: 1px; font-size: 12px; }
+.today-row small { font-size: 11px; }
+.done-icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 0 !important; border-radius: 8px !important; background: #e6f0e9 !important; color: #347153 !important; font-weight: 800; }
+.week-sections { display: grid; gap: 10px; }
+.week-sections section h3 { margin: 5px 0 0; padding-bottom: 5px; border-bottom: 1px solid #eee9e1; color: #687080; font-size: 12px; text-transform: capitalize; }
+.compact-empty { padding: 8px 0; margin: 0; text-align: left; font-size: 12px; }
 .quick-form,
 .editor {
   display: grid;
@@ -340,6 +351,11 @@ main {
   align-items: end;
   margin-top: 18px;
 }
+.movement-form { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto; gap: 9px; align-items: end; }
+.movement-form label,.project-create-form label { display: grid; gap: 5px; color: #596172; font-size: 12px; }
+.movement-form input,.movement-form select,.project-create-form input,.project-create-form select,.project-create-form textarea { width: 100%; border: 1px solid #d9d3c9; border-radius: 9px; padding: 9px; background: #fcfbf8; color: #182033; }
+.project-create-form { display: grid; grid-template-columns: repeat(5,minmax(120px,1fr)); gap: 9px; align-items: end; margin-bottom: 15px; padding: 13px; border: 1px solid #e5ded4; border-radius: 11px; background: #fbf9f5; }
+.project-create-form .wide { grid-column: 1/-1; }
 .sale-form label,
 .event-form label {
   display: grid;
@@ -791,6 +807,33 @@ main {
   color: #fff;
 }
 .project-list { display: grid; gap: 11px; }
+.book-list { display: grid; gap: 11px; }
+.book-card { border: 1px solid #e5ded4; border-radius: 12px; background: #fcfbf8; overflow: hidden; }
+.book-card summary { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; list-style: none; }
+.book-card summary::-webkit-details-marker { display: none; }
+.book-card summary > span:first-child { display: flex; align-items: center; gap: 10px; }
+.book-card summary span span { display: grid; gap: 3px; }
+.book-card summary small { color: #7d8390; font-weight: 400; }
+.book-card .chevron { color: #7d8390; font-size: 20px; transition: transform .18s ease; }
+.book-card[open] .chevron { transform: rotate(180deg); }
+.book-body { padding: 15px 17px 17px; border-top: 1px solid #e9e3da; }
+.book-facts { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 9px; }
+.book-facts > div { display: grid; gap: 4px; padding: 11px; border-radius: 9px; background: #fff; border: 1px solid #ece6de; }
+.book-facts small,.book-links small { color: #7d8390; }
+.book-context { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.book-context section { padding: 11px; border-radius: 9px; background: #fff; border: 1px solid #ece6de; }
+.book-context h4 { margin: 0 0 5px; font-size: 13px; }
+.book-context p { margin: 0; color: #4f5869; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.book-links { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 13px 0; }
+.book-links section { padding: 0 11px; }
+.book-links h4 { margin: 7px 0; }
+.book-links section > div { display: grid; gap: 2px; padding: 7px 0; border-bottom: 1px solid #eee9e1; }
+.book-links p { color: #7d8390; font-size: 12px; }
+.secondary-action { border: 1px solid #d9d3c9; border-radius: 8px; padding: 8px 11px; background: #fff; color: #263651; }
+.book-edit-form { display: grid; grid-template-columns: repeat(4,minmax(120px,1fr)); gap: 9px; align-items: end; }
+.book-edit-form label { display: grid; gap: 5px; color: #596172; font-size: 12px; }
+.book-edit-form input,.book-edit-form select,.book-edit-form textarea { width: 100%; border: 1px solid #d9d3c9; border-radius: 9px; padding: 9px; background: #fff; color: #182033; }
+.book-edit-form .wide { grid-column: 1/-1; }
 .project-card { border: 1px solid #e5ded4; border-radius: 12px; background: #fcfbf8; overflow: hidden; }
 .project-card summary { display: flex; align-items: center; justify-content: space-between; padding: 16px; cursor: pointer; list-style: none; }
 .project-card summary::-webkit-details-marker { display: none; }
@@ -835,8 +878,11 @@ main {
     grid-column: auto;
   }
   .panel {
-    padding: 17px;
+    padding: 14px;
   }
+  .stack { gap: 12px; }
+  .panel > header { margin-bottom: 11px; }
+  .panel h2 { font-size: 18px; }
   .mobile-nav {
     position: fixed;
     z-index: 10;
@@ -865,9 +911,14 @@ main {
   }
   .row {
     align-items: flex-start;
+    min-height: 44px;
+    padding: 7px 2px;
+    gap: 8px;
+    font-size: 13px;
   }
   .row time {
-    min-width: 70px;
+    min-width: 58px;
+    font-size: 11px;
   }
   .agenda-row {
     flex-wrap: wrap;
@@ -886,12 +937,25 @@ main {
     display: none;
   }
   .sale-form,
-  .event-form {
+  .event-form,
+  .movement-form,
+  .project-create-form {
     grid-template-columns: 1fr;
   }
+  .project-create-form .wide { grid-column: auto; }
+  .book-facts,.book-context,.book-links,.book-edit-form { grid-template-columns: 1fr; }
+  .book-edit-form .wide { grid-column: auto; }
+  .book-card summary { padding: 11px; }
+  .book-body { padding: 11px; }
   .calendar-toolbar {
     align-items: flex-start;
+    padding: 10px 11px;
+    gap: 8px;
+    font-size: 12px;
   }
+  .calendar-toolbar button { padding: 7px 9px; }
+  .view-switch { width: 100%; display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; }
+  .view-switch button { padding: 7px 3px; font-size: 10px; }
   .calendar-title {
     width: 100%;
   }
@@ -917,7 +981,28 @@ main {
   }
   .calendar-actions {
     justify-content: space-between;
+    padding: 9px 11px;
+    gap: 8px;
+    font-size: 11px;
   }
+  .calendar-actions .primary { padding: 8px 10px; font-size: 11px; }
+  .timeline { gap: 10px; }
+  .timeline section h3 { margin: 4px 0; padding-bottom: 5px; font-size: 12px; }
+  .agenda-row { min-height: 38px; padding: 5px 0; gap: 6px; font-size: 12px; }
+  .agenda-row > strong { min-width: calc(100% - 69px); font-size: 12px; }
+  .agenda-row time { min-width: 61px; }
+  .project-quick-select { margin-left: 67px; padding: 6px 7px; font-size: 10px; }
+  .calendar-item-actions { margin-top: 0; margin-left: auto; }
+  .calendar-item-actions .icon-action { width: 24px; height: 24px; }
+  .project-mark { width: 19px; height: 19px; margin-right: 5px; }
+  .today-page { gap: 10px; }
+  .today-page .panel { padding: 12px 13px; }
+  .today-page .panel > header { margin-bottom: 4px; }
+  .today-page .panel h2 { font-size: 17px; }
+  .today-row { min-height: 38px; padding: 5px 0; font-size: 12px; }
+  .today-row time { min-width: 52px; font-size: 10px; }
+  .today-row small { font-size: 10px; }
+  .done-icon { width: 25px; height: 25px; }
   .calendar-item {
     padding: 4px;
     font-size: 10px;
