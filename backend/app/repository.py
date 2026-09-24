@@ -220,6 +220,7 @@ class Repository:
             LEFT JOIN sb2_projects p ON p.id=t.project_id
             LEFT JOIN sb2_cases c ON c.id=t.case_id
             WHERE t.user_id=:uid AND t.status NOT IN ('completed','cancelled')
+              AND :event_type=''
               AND (CAST(:start AS date) IS NULL OR t.due_date>=CAST(:start AS date))
               AND (CAST(:end AS date) IS NULL OR t.due_date<=CAST(:end AS date))
               AND (:pattern='%%' OR LOWER(t.title) LIKE :pattern)
