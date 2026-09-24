@@ -206,6 +206,10 @@ main {
 .today-row time { min-width: 72px; display: grid; gap: 1px; font-size: 12px; }
 .today-row small { font-size: 11px; }
 .done-icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 0 !important; border-radius: 8px !important; background: #e6f0e9 !important; color: #347153 !important; font-weight: 800; }
+.todo-description { flex: 1; min-width: 150px; }
+.todo-schedule { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.todo-schedule input { width: 142px; border: 1px solid #d9d3c9; border-radius: 8px; padding: 6px 7px; background: #fcfbf8; color: #172640; font: inherit; }
+.todo-schedule button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: #edf1f6; cursor: pointer; }
 .week-sections { display: grid; gap: 10px; }
 .week-sections section h3 { margin: 5px 0 0; padding-bottom: 5px; border-bottom: 1px solid #eee9e1; color: #687080; font-size: 12px; text-transform: capitalize; }
 .compact-empty { padding: 8px 0; margin: 0; text-align: left; font-size: 12px; }
@@ -1003,6 +1007,10 @@ main {
   .today-row time { min-width: 52px; font-size: 10px; }
   .today-row small { font-size: 10px; }
   .done-icon { width: 25px; height: 25px; }
+  .todo-row { flex-wrap: wrap; }
+  .todo-description { flex-basis: calc(100% - 35px); }
+  .todo-schedule { order: 3; width: 100%; margin: 2px 0 0; }
+  .todo-schedule input { flex: 1; width: auto; }
   .calendar-item {
     padding: 4px;
     font-size: 10px;

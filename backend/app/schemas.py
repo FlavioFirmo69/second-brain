@@ -16,6 +16,11 @@ class TaskCreate(BaseModel):
     book_id: UUID | None = None
 
 
+class TaskSchedule(BaseModel):
+    due_date: date
+    due_time: time | None = None
+
+
 class EventCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     event_date: date

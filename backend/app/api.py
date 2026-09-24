@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .assistant import answer
 from .database import get_session
 from .repository import Repository
-from .schemas import AssistantRequest, BalanceCreate, BookUpdate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, ProjectCreate, SaleCreate, TaskCreate, TransactionCreate
+from .schemas import AssistantRequest, BalanceCreate, BookUpdate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, ProjectCreate, SaleCreate, TaskCreate, TaskSchedule, TransactionCreate
 from .version import APP_VERSION
 
 router = APIRouter(prefix="/api")
@@ -63,6 +63,14 @@ def create_task(payload: TaskCreate, repository: Repository = Depends(repo)):
 def complete_task(task_id: UUID, repository: Repository = Depends(repo)):
     try:
         repository.complete_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.patch("/tasks/{task_id}/schedule")
+def schedule_task(task_id: UUID, payload: TaskSchedule, repository: Repository = Depends(repo)):
+    try:
+        return repository.schedule_task(task_id, payload.due_date, payload.due_time)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

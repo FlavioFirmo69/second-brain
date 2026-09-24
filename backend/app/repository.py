@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -137,6 +137,26 @@ class Repository:
         """), {"id": task_id, "uid": uid})
         self.log(uid, "task", task_id, "complete", dict(before), {"status": "completed"})
         self.session.commit()
+
+    def schedule_task(self, task_id: UUID, due_date: date, due_time: time | None = None) -> dict[str, Any]:
+        uid = self.user_id()
+        before = self.session.execute(text("""
+            SELECT * FROM sb2_tasks
+            WHERE id=:id AND user_id=:uid AND status NOT IN ('completed','cancelled')
+        """), {"id": task_id, "uid": uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Attività non trovata")
+        updated = self.session.execute(text("""
+            UPDATE sb2_tasks
+            SET due_date=CAST(:due_date AS date),due_time=CAST(:due_time AS time),
+                status='planned',updated_at=CURRENT_TIMESTAMP
+            WHERE id=:id AND user_id=:uid
+            RETURNING id,title,status,due_date,due_time
+        """), {"id": task_id, "uid": uid, "due_date": due_date, "due_time": due_time}).mappings().one()
+        result = dict(updated)
+        self.log(uid, "task", task_id, "schedule", dict(before), result)
+        self.session.commit()
+        return result
 
     def list_events(self, start: date, end: date) -> list[dict[str, Any]]:
         self.apply_calendar_rules()

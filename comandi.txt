@@ -1,3 +1,8 @@
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 
-Riassumi in tre punti la strategia di Rubicone senza modificarla
+cd C:\Sorgenti\second-brain
+
+git status
+git add .
+git commit -m "Aggiorna Second Brain alla versione 0.16.0"
+git push origin main
