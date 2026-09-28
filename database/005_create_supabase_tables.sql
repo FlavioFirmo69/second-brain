@@ -105,6 +105,12 @@ create table if not exists public.sb2_strategies (
     content_markdown text not null,
     status varchar(30) not null default 'active',
     version_number integer not null default 1,
+    start_date date,
+    end_date date,
+    baseline_value numeric(18,2),
+    review_frequency varchar(20) not null default 'weekly',
+    last_review_date date,
+    next_review_date date,
     created_at timestamptz(0) not null default now(),
     updated_at timestamptz(0) not null default now(),
     constraint uq_sb2_strategies_code unique (user_id, code)
@@ -144,6 +150,7 @@ create table if not exists public.sb2_tasks (
     case_id uuid references public.sb2_cases(id),
     author_profile_id uuid references public.sb2_author_profiles(id),
     book_id uuid references public.sb2_books(id),
+    strategy_id uuid references public.sb2_strategies(id),
     title varchar(500) not null,
     description text,
     status varchar(30) not null default 'open',
@@ -163,6 +170,7 @@ create table if not exists public.sb2_tasks (
 
 create index if not exists ix_sb2_tasks_open_due
     on public.sb2_tasks(user_id, status, due_date);
+create index if not exists ix_sb2_tasks_strategy on public.sb2_tasks(strategy_id);
 
 create table if not exists public.sb2_events (
     id uuid primary key default gen_random_uuid(),
@@ -171,6 +179,7 @@ create table if not exists public.sb2_events (
     case_id uuid references public.sb2_cases(id),
     author_profile_id uuid references public.sb2_author_profiles(id),
     book_id uuid references public.sb2_books(id),
+    strategy_id uuid references public.sb2_strategies(id),
     title varchar(500) not null,
     event_date date not null,
     start_time time(0),
@@ -185,6 +194,7 @@ create table if not exists public.sb2_events (
 
 create index if not exists ix_sb2_events_date
     on public.sb2_events(user_id, event_date, start_time);
+create index if not exists ix_sb2_events_strategy on public.sb2_events(strategy_id);
 
 create table if not exists public.sb2_sales (
     id uuid primary key default gen_random_uuid(),
@@ -206,6 +216,7 @@ create table if not exists public.sb2_targets (
     user_id uuid not null references public.sb2_users(id),
     author_profile_id uuid references public.sb2_author_profiles(id),
     book_id uuid references public.sb2_books(id),
+    strategy_id uuid references public.sb2_strategies(id),
     metric_code varchar(80) not null,
     target_value numeric(18,2) not null,
     warning_value numeric(18,2),
@@ -213,6 +224,8 @@ create table if not exists public.sb2_targets (
     notes varchar(500),
     created_at timestamptz(0) not null default now()
 );
+
+create index if not exists ix_sb2_targets_strategy on public.sb2_targets(strategy_id);
 
 create table if not exists public.sb2_accounts (
     id uuid primary key default gen_random_uuid(),

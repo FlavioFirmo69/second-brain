@@ -48,6 +48,22 @@ def future_date(day: int, month: int, year: int | None, today: date) -> date:
     return result
 
 
+def find_book(items: list[dict], value: str) -> dict | None:
+    sought = normalize(value).strip(" ?!.,:;0123456789")
+    exact = [item for item in items if normalize(str(item.get("code", ""))) == sought or normalize(str(item.get("title", ""))) == sought]
+    if exact:
+        return exact[0]
+    matches = [item for item in items if sought and (sought in normalize(str(item.get("title", ""))) or sought in normalize(str(item.get("code", ""))))]
+    return matches[0] if len(matches) == 1 else None
+
+
+def date_it(value: date | str | None) -> str:
+    if not value:
+        return "non indicata"
+    parsed = value if isinstance(value, date) else date.fromisoformat(str(value))
+    return parsed.strftime("%d/%m/%Y")
+
+
 async def answer(session: Session, raw_text: str, history: list[dict[str, str]] | None = None) -> dict:
     repo = Repository(session)
     command = normalize(raw_text)
@@ -138,13 +154,53 @@ async def answer(session: Session, raw_text: str, history: list[dict[str, str]] 
             "data": repo.add_sale({"book_code": book.strip(), "quantity": int(quantity), "sale_date": repo.today(), "channel": None, "notes": "Comando naturale"}),
         }
 
+    if re.search(r"\b(?:azioni|attivit[aà])\b", command) and re.search(r"\b(?:ancora|completare|aperte|previste)\b", command):
+        book = next((item for item in repo.books() if normalize(str(item.get("title", ""))) in command or normalize(str(item.get("code", ""))) in command), None)
+        if book:
+            data = repo.search_calendar(context_code=book["code"])
+            data["title"] = f"Azioni aperte di {book['title']}"
+            return {"mode": "deterministic", "kind": "calendar_query", "data": data,
+                    "message": f"Ho trovato {len(data['tasks'])} attività e {len(data['events'])} eventi ancora aperti per {book['title']}."}
+
+    publication = re.search(r"\bpubblicazion[ei]\b.*?\b(?:di|del|della)\s+(.+?)(?:\?|$)", command)
+    if publication:
+        book = find_book(repo.books(), publication.group(1))
+        if book:
+            publication_date = book.get("publication_date")
+            message = (f"La pubblicazione di {book['title']} è prevista per il {date_it(publication_date)}."
+                       if publication_date else f"Per {book['title']} non è ancora stata indicata una data di pubblicazione.")
+            return {"mode": "deterministic", "kind": "book_query", "data": book, "message": message}
+
+    target_query = re.search(r"\btarget\b.*?\b(?:di|del|della)\s+(.+?)(?:\?|$)", command)
+    if target_query:
+        book = find_book(repo.books(), target_query.group(1))
+        if book:
+            target = book.get("target_value")
+            message = (f"Il target di {book['title']} è {target:g} copie entro il {date_it(book.get('target_date'))}."
+                       if target is not None else f"Per {book['title']} non è ancora stato impostato un target di vendita.")
+            return {"mode": "deterministic", "kind": "book_query", "data": book, "message": message}
+
+    if re.search(r"\b(?:andamento|come sta andando|stato)\b.*\bstrateg", command):
+        monitoring = repo.strategy_monitoring()
+        selected = next((item for item in monitoring if normalize(str(item.get("book_title", ""))) in command or normalize(str(item.get("code", ""))).replace("book_", "") in command), None)
+        if selected:
+            labels = {"target_reached": "target raggiunto", "not_started": "non iniziata", "in_line": "in linea", "attention": "da sorvegliare", "behind": "in ritardo"}
+            message = (f"La strategia di {selected['book_title']} è {labels.get(selected['monitor_status'], selected['monitor_status'])}: "
+                       f"{selected['actual_value']:g} copie vendute, {selected['expected_value']:g} attese a oggi, "
+                       f"{selected['actions_completed']} azioni completate su {selected['actions_total']} e {selected['actions_overdue']} scadute.")
+            return {"mode": "deterministic", "kind": "strategy_query", "data": selected, "message": message}
+
     profiles = repo.profiles()
     strategies = repo.strategies()
+    books = repo.books()
+    monitoring = repo.strategy_monitoring()
     projects = repo.projects()
     cases = repo.cases()
     context = "\n\n".join(
         [f"PROFILO {p['code']}:\n{p['positioning']}\n{p['voice_markdown']}\n{p['privacy_markdown']}" for p in profiles]
         + [f"STRATEGIA {s['code']}:\n{s['content_markdown']}" for s in strategies]
+        + [f"LIBRO {b['code']}: {b['title']}\nstato={b['status']}; pubblicazione={b.get('publication_date')}; vendite={b.get('sold')}; target={b.get('target_value')}; scadenza_target={b.get('target_date')}; genere={b.get('genre')}; posizionamento={b.get('positioning')}" for b in books]
+        + [f"MONITORAGGIO {m['code']}:\n" + json.dumps(m, ensure_ascii=False, default=str) for m in monitoring]
         + [f"PROGETTO {p['code']}: {p['title']}\n{p.get('objective') or ''}" for p in projects]
         + [f"PRATICA {c['code']}: {c['title']}\n{c.get('context_markdown') or ''}" for c in cases]
     )
@@ -152,7 +208,7 @@ async def answer(session: Session, raw_text: str, history: list[dict[str, str]] 
     try:
         messages = [
             {"role": "system", "content": f"""Sei il Second Brain personale. Oggi è {repo.today().isoformat()}.
-Usa solo il contesto pertinente e mantieni separate le identità autoriali.
+Usa solo il contesto pertinente e mantieni separate le identità autoriali. Per domande su libri, strategie, pubblicazione, target, vendite e andamento usa esclusivamente i dati LIBRO, STRATEGIA e MONITORAGGIO forniti; non inventare valori mancanti.
 Rispondi ESCLUSIVAMENTE con un oggetto JSON, senza markdown, scegliendo una forma:
 {{"action":"create_event","title":"...","event_date":"YYYY-MM-DD","start_time":"HH:MM:SS o null","location":null,"event_type":"personal","project_code":null,"case_code":null}}
 {{"action":"create_events","events":[{{"title":"...","event_date":"YYYY-MM-DD","start_time":"HH:MM:SS o null","end_time":"HH:MM:SS o null","location":null,"event_type":"personal","project_code":null,"case_code":null}}]}}

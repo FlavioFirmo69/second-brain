@@ -375,6 +375,78 @@ class Repository:
             WHERE s.user_id=:uid AND s.status='active' ORDER BY s.title
         """), {"uid": self.user_id()}))
 
+    def strategy_monitoring(self) -> list[dict[str, Any]]:
+        """Return deterministic progress indicators for explicitly linked strategies."""
+        uid = self.user_id()
+        today = self.today()
+        items = rows(self.session.execute(text("""
+            SELECT s.id,s.code,s.title,s.start_date,s.end_date,s.baseline_value,
+                   s.review_frequency,s.last_review_date,s.next_review_date,
+                   b.title AS book_title,
+                   target.target_value,target.target_date,
+                   COALESCE(sales.actual_value,0) AS actual_value,
+                   COALESCE(tasks.total,0) + COALESCE(events.total,0) AS actions_total,
+                   COALESCE(tasks.completed,0) + COALESCE(events.completed,0) AS actions_completed,
+                   COALESCE(tasks.overdue,0) + COALESCE(events.overdue,0) AS actions_overdue
+            FROM sb2_strategies s
+            JOIN sb2_books b ON b.id=s.book_id
+            JOIN LATERAL (
+                SELECT x.target_value,x.target_date
+                FROM sb2_targets x
+                WHERE x.strategy_id=s.id AND x.metric_code='copies_sold'
+                ORDER BY x.target_date DESC LIMIT 1
+            ) target ON true
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(SUM(x.quantity),0) AS actual_value
+                FROM sb2_sales x WHERE x.book_id=s.book_id AND x.sale_date<=:today
+            ) sales ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS total,
+                       COUNT(*) FILTER (WHERE x.status='completed') AS completed,
+                       COUNT(*) FILTER (WHERE x.status NOT IN ('completed','cancelled') AND x.due_date<:today) AS overdue
+                FROM sb2_tasks x WHERE x.strategy_id=s.id
+            ) tasks ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS total,
+                       COUNT(*) FILTER (WHERE x.status='completed') AS completed,
+                       COUNT(*) FILTER (WHERE x.status NOT IN ('completed','cancelled') AND x.event_date<:today) AS overdue
+                FROM sb2_events x WHERE x.strategy_id=s.id
+            ) events ON true
+            WHERE s.user_id=:uid AND s.status='active'
+            ORDER BY s.title
+        """), {"uid": uid, "today": today}))
+
+        for item in items:
+            start = item["start_date"] or today
+            end = item["end_date"] or item["target_date"]
+            baseline = Decimal(item["baseline_value"] or 0)
+            target = Decimal(item["target_value"])
+            actual = Decimal(item["actual_value"] or 0)
+            if end is None or end <= start:
+                expected = target if today >= start else baseline
+            else:
+                elapsed = max(0, min((today - start).days, (end - start).days))
+                ratio = Decimal(elapsed) / Decimal((end - start).days)
+                expected = baseline + ((target - baseline) * ratio)
+            expected = expected.quantize(Decimal("0.01"))
+            performance = None if expected <= 0 else (actual / expected * 100).quantize(Decimal("0.1"))
+            if actual >= target:
+                monitor_status = "target_reached"
+            elif today < start:
+                monitor_status = "not_started"
+            elif expected <= 0 or actual >= expected * Decimal("0.90"):
+                monitor_status = "in_line"
+            elif actual >= expected * Decimal("0.75"):
+                monitor_status = "attention"
+            else:
+                monitor_status = "behind"
+            item.update({
+                "expected_value": expected,
+                "performance_percent": performance,
+                "monitor_status": monitor_status,
+            })
+        return items
+
     def books(self) -> list[dict[str, Any]]:
         uid = self.user_id()
         items = rows(self.session.execute(text("""
@@ -562,7 +634,33 @@ class Repository:
             sold = Decimal(item["sold"])
             item["remaining"] = max(Decimal(0), Decimal(target) - sold) if target is not None else None
             item["status"] = "target_reached" if target is not None and sold >= Decimal(target) else "in_progress"
-        return {"items": items}
+        recent_sales = rows(self.session.execute(text(f"""
+            SELECT s.id,b.code AS book_code,b.title AS book_title,s.sale_date,s.quantity,s.channel,s.notes,s.created_at
+            FROM sb2_sales s
+            JOIN sb2_books b ON b.id=s.book_id
+            JOIN sb2_author_profiles a ON a.id=b.author_profile_id
+            WHERE a.user_id=:uid{condition}
+            ORDER BY s.sale_date DESC,s.created_at DESC
+            LIMIT 50
+        """), params))
+        return {"items": items, "recent_sales": recent_sales}
+
+    def delete_sale(self, sale_id: UUID) -> None:
+        uid = self.user_id()
+        before = self.session.execute(text("""
+            SELECT s.* FROM sb2_sales s
+            JOIN sb2_books b ON b.id=s.book_id
+            JOIN sb2_author_profiles a ON a.id=b.author_profile_id
+            WHERE s.id=:id AND s.user_id=:uid AND a.user_id=:uid
+        """), {"id": sale_id, "uid": uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Vendita non trovata")
+        self.session.execute(
+            text("DELETE FROM sb2_sales WHERE id=:id AND user_id=:uid"),
+            {"id": sale_id, "uid": uid},
+        )
+        self.log(uid, "sale", sale_id, "delete", dict(before), None)
+        self.session.commit()
 
     def finance(self) -> dict[str, Any]:
         uid = self.user_id()
@@ -685,6 +783,21 @@ class Repository:
         """), {"uid": uid, "title": title.strip()[:250]}).mappings().one()
         self.session.commit()
         return dict(item)
+
+    def delete_conversation(self, conversation_id: UUID) -> None:
+        uid = self.user_id()
+        before = self.session.execute(text("""
+            SELECT id,title,status,created_at,updated_at FROM sb2_conversations
+            WHERE id=:id AND user_id=:uid
+        """), {"id": conversation_id, "uid": uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Conversazione non trovata")
+        self.session.execute(
+            text("DELETE FROM sb2_conversations WHERE id=:id AND user_id=:uid"),
+            {"id": conversation_id, "uid": uid},
+        )
+        self.log(uid, "conversation", conversation_id, "delete", dict(before), None)
+        self.session.commit()
 
     def conversation_messages(self, conversation_id: UUID) -> list[dict[str, Any]]:
         items = rows(self.session.execute(text("""

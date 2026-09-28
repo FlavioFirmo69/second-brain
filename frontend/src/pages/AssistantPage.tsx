@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, post } from '../api'
+import { api, post, remove } from '../api'
 import { MarkdownView } from '../components/MarkdownView'
 import { formatDate } from '../date'
 import type { ChatMessage, ChatResponse, Conversation, Dashboard, EventItem, Finance, Task } from '../types'
@@ -39,6 +39,14 @@ export function AssistantPage() {
     const item = await post<Conversation>('/conversations',{title:'Nuova conversazione'})
     setConversations(current=>[item,...current]); setActive(item.id); setMessages([]); setText('')
     return item.id
+  }
+  async function deleteConversation(id:string) {
+    await remove(`/conversations/${id}`)
+    const remaining=conversations.filter(item=>item.id!==id)
+    setConversations(remaining)
+    if(active!==id)return
+    if(remaining[0])await choose(remaining[0].id)
+    else await createConversation()
   }
   async function send(e:React.FormEvent) {
     e.preventDefault(); const prompt=text.trim(); if (!prompt || busy) return
@@ -105,7 +113,7 @@ export function AssistantPage() {
   return <div className="assistant-shell">
     <section className="conversation-list">
       <button className="new-chat" onClick={()=>void createConversation()}>＋ Nuova conversazione</button>
-      <div>{conversations.map(item=><button key={item.id} className={active===item.id?'active':''} onClick={()=>void choose(item.id)}>{item.title}</button>)}</div>
+      <div>{conversations.map(item=><div className={`conversation-entry ${active===item.id?'active':''}`} key={item.id}><button className="conversation-title" onClick={()=>void choose(item.id)}>{item.title}</button><button className="conversation-delete" title="Elimina conversazione" aria-label={`Elimina conversazione ${item.title}`} onClick={()=>void deleteConversation(item.id)}>×</button></div>)}</div>
     </section>
     <section className="chat-panel">
       <div className="chat-scroll">

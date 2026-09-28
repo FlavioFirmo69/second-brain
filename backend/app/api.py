@@ -147,6 +147,11 @@ def strategies(repository: Repository = Depends(repo)):
     return repository.strategies()
 
 
+@router.get("/strategies/monitoring")
+def strategy_monitoring(repository: Repository = Depends(repo)):
+    return repository.strategy_monitoring()
+
+
 @router.get("/books")
 def books(repository: Repository = Depends(repo)):
     return repository.books()
@@ -189,6 +194,14 @@ def sales(book_code: str | None = None, repository: Repository = Depends(repo)):
 def create_sale(payload: SaleCreate, repository: Repository = Depends(repo)):
     try:
         return repository.add_sale(payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/sales/{sale_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sale(sale_id: UUID, repository: Repository = Depends(repo)):
+    try:
+        repository.delete_sale(sale_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -274,6 +287,14 @@ def conversations(repository: Repository = Depends(repo)):
 @router.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(payload: ConversationCreate, repository: Repository = Depends(repo)):
     return repository.create_conversation(payload.title)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_conversation(conversation_id: UUID, repository: Repository = Depends(repo)):
+    try:
+        repository.delete_conversation(conversation_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/conversations/{conversation_id}/messages")

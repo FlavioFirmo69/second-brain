@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
-import { api, post, put } from '../api'
+import { api, post, put, remove } from '../api'
 import { MarkdownView } from '../components/MarkdownView'
 import { Panel } from '../components/Panel'
 import { Status } from '../components/Status'
 import { formatDate, isoDateLocal } from '../date'
-import type { Book, Profile, SaleProgress, Strategy } from '../types'
+import type { Book, Profile, SaleProgress, Strategy, StrategyMonitoring } from '../types'
 
 export function EditorialPage() {
   const [strategies, setStrategies] = useState<Strategy[]>([])
   const [books,setBooks]=useState<Book[]>([])
   const [profiles,setProfiles]=useState<Profile[]>([])
   const [sales, setSales] = useState<SaleProgress>({items:[]})
+  const [monitoring, setMonitoring] = useState<StrategyMonitoring[]>([])
   const [book, setBook] = useState('')
   const [quantity, setQuantity] = useState('')
   const [saleDate, setSaleDate] = useState(isoDateLocal())
   const [channel, setChannel] = useState('')
   const [message, setMessage] = useState('')
-  const load = () => Promise.all([api<Strategy[]>('/strategies').then(setStrategies),api<Book[]>('/books').then(setBooks),api<Profile[]>('/profiles').then(setProfiles), api<SaleProgress>('/sales').then(data => { setSales(data); setBook(current => current || data.items[0]?.code || '') })])
+  const load = () => Promise.all([api<Strategy[]>('/strategies').then(setStrategies),api<StrategyMonitoring[]>('/strategies/monitoring').then(setMonitoring),api<Book[]>('/books').then(setBooks),api<Profile[]>('/profiles').then(setProfiles), api<SaleProgress>('/sales').then(data => { setSales(data); setBook(current => current || data.items[0]?.code || '') })])
   useEffect(() => { void load() }, [])
 
   async function addSale(e: React.FormEvent) {
@@ -27,6 +28,12 @@ export function EditorialPage() {
     const title = sales.items.find(item => item.code === book)?.title || book
     setMessage(`Registrate ${amount} copie di ${title}.`)
     setQuantity(''); setChannel(''); await load()
+  }
+
+  async function deleteSale(id:string, title:string) {
+    await remove(`/sales/${id}`)
+    setMessage(`Vendita di ${title} eliminata.`)
+    await load()
   }
 
   return <div className="stack">
@@ -42,6 +49,22 @@ export function EditorialPage() {
         <label>Canale (facoltativo)<input value={channel} onChange={e=>setChannel(e.target.value)} placeholder="Es. Amazon, evento, diretto"/></label>
         <button>Registra vendita</button>
       </form>
+      <div className="sales-history">
+        <h3>Vendite registrate</h3>
+        {sales.recent_sales?.length?<div className="sales-table">{sales.recent_sales.map(item=><div className="sale-row" key={item.id}>
+          <time>{formatDate(item.sale_date)}</time><strong>{item.book_title}</strong><span>{item.quantity} {item.quantity===1?'copia':'copie'}</span><small>{item.channel||'Canale non indicato'}</small>
+          <button type="button" className="sale-delete" title="Elimina vendita" aria-label={`Elimina vendita di ${item.book_title}`} onClick={()=>void deleteSale(item.id,item.book_title)}>×</button>
+        </div>)}</div>:<p>Nessuna vendita registrata.</p>}
+      </div>
+    </Panel>
+    <Panel title="Monitoraggio strategie">
+      {monitoring.length?<div className="cards strategy-monitoring">{monitoring.map(item=><article className="metric" key={item.id}>
+        <div className="monitor-heading"><div><h3>{item.title}</h3><small>{item.book_title}</small></div><Status value={item.monitor_status}/></div>
+        <strong>{item.actual_value} / {item.target_value}</strong>
+        <small>Atteso a oggi: {item.expected_value}{item.performance_percent!=null?` · ${item.performance_percent}% del ritmo`:''}</small>
+        <div className="monitor-actions"><span>Azioni completate <b>{item.actions_completed}/{item.actions_total}</b></span><span>Scadute <b>{item.actions_overdue}</b></span></div>
+        <small>Periodo {formatDate(item.start_date)} – {formatDate(item.end_date||item.target_date)}</small>
+      </article>)}</div>:<p>Nessuna strategia dispone ancora di collegamenti e target espliciti.</p>}
     </Panel>
     <Panel title="Strategie attive"><div className="strategy-list">{strategies.map(s => <details className="strategy-card" key={s.id} open><summary><span><strong>{s.title}</strong>{s.book_title&&<small>{s.book_title}</small>}</span><span className="lock-mark" title="Sola lettura" aria-label="Sola lettura">▣</span></summary><MarkdownView value={s.content_markdown}/></details>)}</div></Panel>
   </div>
