@@ -18,32 +18,31 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
 
     # Un evento senza orario rappresenta un'attività giornaliera. Se scade,
     # diventa un TODO senza data conservando gli eventuali collegamenti.
+    # L'UPDATE ... RETURNING rende il rollover atomico: richieste simultanee
+    # non possono convertire due volte lo stesso evento.
     session.execute(text("""
+        WITH expired_events AS (
+            UPDATE sb2_events
+            SET status='completed',updated_at=CURRENT_TIMESTAMP
+            WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
+              AND event_date<:today AND start_time IS NULL
+            RETURNING id,user_id,project_id,case_id,author_profile_id,book_id,strategy_id,title
+        )
         INSERT INTO sb2_tasks(
-            user_id,project_id,case_id,author_profile_id,book_id,
+            user_id,project_id,case_id,author_profile_id,book_id,strategy_id,
             title,description,status,priority,due_date,due_time,source
         )
         SELECT
-            e.user_id,e.project_id,e.case_id,e.author_profile_id,e.book_id,
+            e.user_id,e.project_id,e.case_id,e.author_profile_id,e.book_id,e.strategy_id,
             e.title,'calendar_event:' || e.id::text,'open',3,NULL,NULL,'calendar_rollover'
-        FROM sb2_events e
-        WHERE e.user_id=:uid
-          AND e.status NOT IN ('completed','cancelled')
-          AND e.event_date<:today
-          AND e.start_time IS NULL
-          AND NOT EXISTS (
+        FROM expired_events e
+        WHERE NOT EXISTS (
               SELECT 1 FROM sb2_tasks t
               WHERE t.user_id=e.user_id
                 AND t.description='calendar_event:' || e.id::text
                 AND t.source='calendar_rollover'
           )
-    """), {"uid": user_id, "today": today})
-
-    session.execute(text("""
-        UPDATE sb2_events
-        SET status='completed',updated_at=CURRENT_TIMESTAMP
-        WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
-          AND event_date<:today AND start_time IS NULL
+        ON CONFLICT DO NOTHING
     """), {"uid": user_id, "today": today})
 
     session.execute(text("""

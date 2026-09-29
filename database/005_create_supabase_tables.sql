@@ -83,6 +83,10 @@ create table if not exists public.sb2_books (
     title varchar(500) not null,
     status varchar(30) not null,
     publication_date date,
+    publication_date_precision varchar(20) not null default 'unknown',
+    promotion_status varchar(20) not null default 'none',
+    source_system varchar(40) not null default 'manual',
+    external_id varchar(120),
     format_notes varchar(500),
     genre varchar(120),
     synopsis text,
@@ -94,6 +98,29 @@ create table if not exists public.sb2_books (
     created_at timestamptz(0) not null default now(),
     updated_at timestamptz(0) not null default now()
 );
+
+create unique index if not exists ux_sb2_books_external_source
+    on public.sb2_books(source_system, external_id);
+
+create table if not exists public.sb2_book_editions (
+    id uuid primary key default gen_random_uuid(),
+    book_id uuid not null references public.sb2_books(id) on delete cascade,
+    format_code varchar(20) not null,
+    status varchar(20) not null default 'unpublished',
+    publication_date date,
+    isbn varchar(32),
+    notes varchar(500),
+    source_system varchar(40) not null default 'manual',
+    external_id varchar(120),
+    created_at timestamptz(0) not null default now(),
+    updated_at timestamptz(0) not null default now(),
+    constraint ck_sb2_book_editions_format check (format_code in ('ebook','paperback')),
+    constraint ck_sb2_book_editions_status check (status in ('unpublished','published','withdrawn')),
+    constraint uq_sb2_book_editions_format unique (book_id,format_code)
+);
+
+create unique index if not exists ux_sb2_book_editions_external_source
+    on public.sb2_book_editions(source_system, external_id);
 
 create table if not exists public.sb2_strategies (
     id uuid primary key default gen_random_uuid(),
@@ -171,6 +198,10 @@ create table if not exists public.sb2_tasks (
 create index if not exists ix_sb2_tasks_open_due
     on public.sb2_tasks(user_id, status, due_date);
 create index if not exists ix_sb2_tasks_strategy on public.sb2_tasks(strategy_id);
+create unique index if not exists ux_sb2_tasks_calendar_rollover
+    on public.sb2_tasks(user_id, description)
+    where source = 'calendar_rollover'
+      and description like 'calendar_event:%';
 
 create table if not exists public.sb2_events (
     id uuid primary key default gen_random_uuid(),
@@ -200,16 +231,24 @@ create table if not exists public.sb2_sales (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references public.sb2_users(id),
     book_id uuid not null references public.sb2_books(id),
+    edition_id uuid references public.sb2_book_editions(id),
     sale_date date not null,
     quantity integer not null,
     channel varchar(100),
     notes varchar(500),
+    source_system varchar(40) not null default 'manual',
+    external_id varchar(160),
+    imported_at timestamptz(0),
     created_at timestamptz(0) not null default now(),
     constraint ck_sb2_sales_quantity check (quantity > 0)
 );
 
 create index if not exists ix_sb2_sales_book_date
     on public.sb2_sales(book_id, sale_date);
+create index if not exists ix_sb2_sales_edition_date
+    on public.sb2_sales(edition_id, sale_date);
+create unique index if not exists ux_sb2_sales_external_source
+    on public.sb2_sales(source_system, external_id);
 
 create table if not exists public.sb2_targets (
     id uuid primary key default gen_random_uuid(),
@@ -345,7 +384,7 @@ declare
 begin
     foreach table_name in array array[
         'sb2_users', 'sb2_author_profiles', 'sb2_agent_prompt_versions',
-        'sb2_channels', 'sb2_books', 'sb2_strategies', 'sb2_projects',
+        'sb2_channels', 'sb2_books', 'sb2_book_editions', 'sb2_strategies', 'sb2_projects',
         'sb2_cases', 'sb2_tasks', 'sb2_events', 'sb2_sales', 'sb2_targets',
         'sb2_accounts', 'sb2_transactions', 'sb2_balance_checks', 'sb2_inbox',
         'sb2_change_log', 'sb2_conversations', 'sb2_messages'

@@ -46,6 +46,7 @@ class InboxCreate(BaseModel):
 
 class SaleCreate(BaseModel):
     book_code: str
+    format_code: str = Field(pattern=r"^(ebook|paperback)$")
     quantity: int = Field(gt=0)
     sale_date: date
     channel: str | None = None
@@ -80,6 +81,7 @@ class BookUpdate(BaseModel):
     author_code: str
     status: str = Field(min_length=1, max_length=30)
     publication_date: date | None = None
+    promotion_status: str = Field(default="none", pattern=r"^(none|candidate|strategy_requested|active|paused|completed)$")
     format_notes: str | None = Field(default=None, max_length=500)
     genre: str | None = Field(default=None, max_length=120)
     synopsis: str | None = None

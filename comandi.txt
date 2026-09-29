@@ -4,5 +4,14 @@ cd C:\Sorgenti\second-brain
 
 git status
 git add .
-git commit -m "Aggiorna Second Brain alla versione 0.21.0"
+git commit -m "Aggiorna Second Brain alla versione 0.22.0"
 git push origin main
+
+Questo ZIP contiene la versione corrente e funzionante del progetto Second Brain, versione 0.22.0.
+Stack: React/Vite, FastAPI, PostgreSQL/Supabase e deploy Vercel.
+Il database Supabase è già aggiornato e contiene la libreria dei libri di Flavio e lo storico delle vendite ebook.
+Le nuove vendite devono distinguere ebook e cartaceo.
+Considera esclusivamente i file presenti nello ZIP come sorgente autorevole. Non utilizzare versioni o script precedenti.
+Prima di propormi modifiche, analizza la struttura del progetto. Genera lo ZIP completo soltanto quando lo richiedo esplicitamente.
+
+Non modificare né includere backend/.env; deve essere sempre preservato durante gli aggiornamenti.

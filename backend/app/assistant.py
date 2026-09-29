@@ -148,10 +148,15 @@ async def answer(session: Session, raw_text: str, history: list[dict[str, str]] 
     match = re.fullmatch(r"ho venduto\s+(\d+)\s+copie\s+di\s+(.+)", command)
     if match:
         quantity, book = match.groups()
+        format_code = "paperback" if re.search(r"\b(?:cartaceo|cartacee)\b", book) else "ebook" if re.search(r"\bebook\b", book) else None
+        if format_code is None:
+            return {"mode": "deterministic", "kind": "answer",
+                    "message": "Indica il formato della vendita: ebook oppure cartaceo."}
+        book = re.sub(r"\s+(?:ebook|cartaceo|cartacee)\s*$", "", book).strip()
         return {
             "mode": "deterministic",
             "kind": "sales",
-            "data": repo.add_sale({"book_code": book.strip(), "quantity": int(quantity), "sale_date": repo.today(), "channel": None, "notes": "Comando naturale"}),
+            "data": repo.add_sale({"book_code": book, "format_code": format_code, "quantity": int(quantity), "sale_date": repo.today(), "channel": None, "notes": "Comando naturale"}),
         }
 
     if re.search(r"\b(?:azioni|attivit[aà])\b", command) and re.search(r"\b(?:ancora|completare|aperte|previste)\b", command):

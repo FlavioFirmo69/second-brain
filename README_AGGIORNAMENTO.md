@@ -1,5 +1,18 @@
 # Aggiornamento Second Brain — Supabase
 
+## Versione 0.22.0
+
+- libreria completa dei libri di Flavio;
+- anagrafiche libro modificabili, incluse sinossi e data di pubblicazione;
+- stato promozionale separato dallo stato editoriale;
+- edizioni ebook e cartaceo associate al libro;
+- formato obbligatorio quando si registra una nuova vendita;
+- totali vendite distinti fra ebook e cartaceo;
+- storico importato riconosciuto come ebook.
+
+Il database già aggiornato con gli script `011a` e `012` non richiede altre
+query prima dell'avvio di questa versione.
+
 Questo archivio contiene il progetto completo predisposto per PostgreSQL/Supabase e Vercel.
 
 ## Sostituzione dei file

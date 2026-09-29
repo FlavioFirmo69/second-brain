@@ -14,6 +14,8 @@ Per il passaggio da SQL Server a Supabase e la pubblicazione su Vercel vedere **
 - progetti e pratiche;
 - profili autoriali Flavio/Cesare modificabili e versionati;
 - strategie di autore e di libro;
+- libreria con anagrafiche, stato editoriale e stato promozionale;
+- edizioni ebook/cartaceo e vendite distinte per formato;
 - vendite e confronto con i target;
 - saldo, riconciliazioni e proiezioni;
 - inbox per note rapide;
@@ -25,7 +27,7 @@ Per il passaggio da SQL Server a Supabase e la pubblicazione su Vercel vedere **
 
 - Python 3.12 o successivo;
 - Node.js 20 o successivo;
-- progetto Supabase con le 19 tabelle `sb2_`;
+- progetto Supabase con le tabelle `sb2_`;
 - stringa Shared pooler Supabase;
 - Microsoft ODBC Driver 17/18 e accesso al vecchio SQL Server soltanto per la migrazione iniziale.
 

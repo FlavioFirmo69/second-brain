@@ -452,6 +452,7 @@ class Repository:
         items = rows(self.session.execute(text("""
             SELECT b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
                    b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
+                   b.promotion_status,b.publication_date_precision,
                    a.code AS author_code,a.display_name AS author_name,
                    COALESCE(SUM(s.quantity),0) AS sold,
                    t.target_value,t.target_date
@@ -465,7 +466,8 @@ class Repository:
             ) t ON true
             WHERE a.user_id=:uid
             GROUP BY b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
-                     b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
+                   b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
+                     b.promotion_status,b.publication_date_precision,
                      a.code,a.display_name,t.target_value,t.target_date
             ORDER BY b.title
         """), {"uid": uid}))
@@ -478,6 +480,11 @@ class Repository:
                 SELECT id,code,title,status,version_number FROM sb2_strategies
                 WHERE user_id=:uid AND book_id=:book_id ORDER BY title
             """), {"uid": uid, "book_id": item["id"]}))
+            item["editions"] = rows(self.session.execute(text("""
+                SELECT id,format_code,status,publication_date,isbn,notes
+                FROM sb2_book_editions
+                WHERE book_id=:book_id ORDER BY format_code
+            """), {"book_id": item["id"]}))
         return items
 
     def update_book(self, book_id: UUID, data: dict[str, Any]) -> dict[str, Any]:
@@ -497,7 +504,8 @@ class Repository:
             UPDATE sb2_books SET author_profile_id=:author_id,title=:title,status=:status,
               publication_date=:publication_date,format_notes=:format_notes,genre=:genre,
               synopsis=:synopsis,themes=:themes,target_reader=:target_reader,positioning=:positioning,
-              differentiators=:differentiators,tone_notes=:tone_notes,updated_at=CURRENT_TIMESTAMP
+              differentiators=:differentiators,tone_notes=:tone_notes,
+              promotion_status=:promotion_status,updated_at=CURRENT_TIMESTAMP
             WHERE id=:id
         """), {"id": book_id, "author_id": author_id, **data})
         self.session.execute(text("""
@@ -597,14 +605,32 @@ class Repository:
 
     def add_sale(self, data: dict[str, Any]) -> dict[str, Any]:
         uid = self.user_id()
-        book = self.session.execute(text("SELECT id,title FROM sb2_books WHERE code=:code"), {"code": data["book_code"].upper()}).mappings().one_or_none()
+        book = self.session.execute(text("""
+            SELECT b.id,b.title,b.status,b.publication_date
+            FROM sb2_books b JOIN sb2_author_profiles a ON a.id=b.author_profile_id
+            WHERE a.user_id=:uid AND UPPER(b.code)=UPPER(:code)
+        """), {"uid": uid, "code": data["book_code"]}).mappings().one_or_none()
         if book is None:
             raise KeyError("Libro non trovato")
+        format_code = data["format_code"]
+        edition_id = self.session.execute(text("""
+            SELECT id FROM sb2_book_editions WHERE book_id=:book_id AND format_code=:format_code
+        """), {"book_id": book["id"], "format_code": format_code}).scalar_one_or_none()
+        if edition_id is None:
+            edition_status = "published" if book["status"] == "published" else "unpublished"
+            edition_publication_date = book["publication_date"] if edition_status == "published" else None
+            edition_id = self.session.execute(text("""
+                INSERT INTO sb2_book_editions(book_id,format_code,status,publication_date,source_system)
+                VALUES(:book_id,:format_code,:edition_status,:publication_date,'manual')
+                RETURNING id
+            """), {"book_id": book["id"], "format_code": format_code,
+                     "edition_status": edition_status, "publication_date": edition_publication_date}).scalar_one()
         sale_id = self.session.execute(text("""
-            INSERT INTO sb2_sales(user_id,book_id,sale_date,quantity,channel,notes)
-            VALUES(:uid,:book_id,:sale_date,:quantity,:channel,:notes)
+            INSERT INTO sb2_sales(user_id,book_id,edition_id,sale_date,quantity,channel,notes,source_system)
+            VALUES(:uid,:book_id,:edition_id,:sale_date,:quantity,:channel,:notes,'manual')
             RETURNING id
-        """), {"uid": uid, "book_id": book["id"], **{k: data.get(k) for k in ("sale_date", "quantity", "channel", "notes")}}).scalar_one()
+        """), {"uid": uid, "book_id": book["id"], "edition_id": edition_id,
+                 **{k: data.get(k) for k in ("sale_date", "quantity", "channel", "notes")}}).scalar_one()
         self.log(uid, "sale", sale_id, "create", None, data)
         self.session.commit()
         return self.sales_progress(data["book_code"])
@@ -617,9 +643,12 @@ class Repository:
             params["code"] = book_code.upper()
         items = rows(self.session.execute(text(f"""
             SELECT b.code,b.title,COALESCE(SUM(s.quantity),0) AS sold,
+                   COALESCE(SUM(s.quantity) FILTER (WHERE e.format_code='ebook'),0) AS ebook_sold,
+                   COALESCE(SUM(s.quantity) FILTER (WHERE e.format_code='paperback'),0) AS paperback_sold,
                    t.target_value,t.warning_value,t.target_date
             FROM sb2_books b
             LEFT JOIN sb2_sales s ON s.book_id=b.id
+            LEFT JOIN sb2_book_editions e ON e.id=s.edition_id
             LEFT JOIN LATERAL (
                 SELECT target_value,warning_value,target_date FROM sb2_targets x
                 WHERE x.book_id=b.id AND x.metric_code='copies_sold'
@@ -635,9 +664,11 @@ class Repository:
             item["remaining"] = max(Decimal(0), Decimal(target) - sold) if target is not None else None
             item["status"] = "target_reached" if target is not None and sold >= Decimal(target) else "in_progress"
         recent_sales = rows(self.session.execute(text(f"""
-            SELECT s.id,b.code AS book_code,b.title AS book_title,s.sale_date,s.quantity,s.channel,s.notes,s.created_at
+            SELECT s.id,b.code AS book_code,b.title AS book_title,s.sale_date,s.quantity,s.channel,s.notes,
+                   COALESCE(e.format_code,'unspecified') AS format_code,s.created_at
             FROM sb2_sales s
             JOIN sb2_books b ON b.id=s.book_id
+            LEFT JOIN sb2_book_editions e ON e.id=s.edition_id
             JOIN sb2_author_profiles a ON a.id=b.author_profile_id
             WHERE a.user_id=:uid{condition}
             ORDER BY s.sale_date DESC,s.created_at DESC
