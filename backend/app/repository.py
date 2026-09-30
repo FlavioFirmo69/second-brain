@@ -518,7 +518,7 @@ class Repository:
 
     def projects(self) -> list[dict[str, Any]]:
         items = rows(self.session.execute(text("""
-            SELECT p.id,p.code,p.title,p.status,p.objective,p.notes_markdown,
+            SELECT p.id,p.code,p.title,p.status,p.objective,p.notes_markdown,p.book_id,
                    a.display_name AS author_name,b.title AS book_title
             FROM sb2_projects p
             LEFT JOIN sb2_author_profiles a ON a.id=p.author_profile_id
@@ -528,14 +528,14 @@ class Repository:
         for item in items:
             item["tasks"] = rows(self.session.execute(text("""
                 SELECT id,title,status,priority,due_date,due_time FROM sb2_tasks
-                WHERE user_id=:uid AND project_id=:project_id AND status NOT IN ('completed','cancelled')
+                WHERE user_id=:uid AND (project_id=:project_id OR (book_id=:book_id AND plan_id IS NOT NULL)) AND status NOT IN ('completed','cancelled')
                 ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,due_date,due_time,priority
-            """), {"uid": self.user_id(), "project_id": item["id"]}))
+            """), {"uid": self.user_id(), "project_id": item["id"], "book_id": item["book_id"]}))
             item["events"] = rows(self.session.execute(text("""
                 SELECT id,title,status,event_date,start_time,end_time,location,event_type FROM sb2_events
-                WHERE user_id=:uid AND project_id=:project_id AND status NOT IN ('completed','cancelled')
+                WHERE user_id=:uid AND (project_id=:project_id OR (book_id=:book_id AND plan_id IS NOT NULL)) AND status NOT IN ('completed','cancelled')
                 ORDER BY event_date,start_time,title
-            """), {"uid": self.user_id(), "project_id": item["id"]}))
+            """), {"uid": self.user_id(), "project_id": item["id"], "book_id": item["book_id"]}))
         return items
 
     def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -608,10 +608,16 @@ class Repository:
         book = self.session.execute(text("""
             SELECT b.id,b.title,b.status,b.publication_date
             FROM sb2_books b JOIN sb2_author_profiles a ON a.id=b.author_profile_id
-            WHERE a.user_id=:uid AND UPPER(b.code)=UPPER(:code)
+            WHERE a.user_id=:uid AND UPPER(b.code)=UPPER(:code) FOR UPDATE OF b
         """), {"uid": uid, "code": data["book_code"]}).mappings().one_or_none()
         if book is None:
             raise KeyError("Libro non trovato")
+        if data.get("from_inventory"):
+            if data["format_code"] != "paperback":
+                raise ValueError("Il magazzino contiene solo copie cartacee")
+            available = self.session.execute(text("SELECT COALESCE((SELECT SUM(quantity) FROM sb2_stock_purchases WHERE book_id=:bid),0)-COALESCE((SELECT SUM(quantity) FROM sb2_sales WHERE book_id=:bid AND from_inventory),0)"), {"bid": book["id"]}).scalar_one()
+            if data["quantity"] > available:
+                raise ValueError("Copie insufficienti in magazzino")
         format_code = data["format_code"]
         edition_id = self.session.execute(text("""
             SELECT id FROM sb2_book_editions WHERE book_id=:book_id AND format_code=:format_code
@@ -626,10 +632,10 @@ class Repository:
             """), {"book_id": book["id"], "format_code": format_code,
                      "edition_status": edition_status, "publication_date": edition_publication_date}).scalar_one()
         sale_id = self.session.execute(text("""
-            INSERT INTO sb2_sales(user_id,book_id,edition_id,sale_date,quantity,channel,notes,source_system)
-            VALUES(:uid,:book_id,:edition_id,:sale_date,:quantity,:channel,:notes,'manual')
+            INSERT INTO sb2_sales(user_id,book_id,edition_id,sale_date,quantity,channel,notes,source_system,from_inventory)
+            VALUES(:uid,:book_id,:edition_id,:sale_date,:quantity,:channel,:notes,'manual',:from_inventory)
             RETURNING id
-        """), {"uid": uid, "book_id": book["id"], "edition_id": edition_id,
+        """), {"uid": uid, "book_id": book["id"], "edition_id": edition_id, "from_inventory": data.get("from_inventory", False),
                  **{k: data.get(k) for k in ("sale_date", "quantity", "channel", "notes")}}).scalar_one()
         self.log(uid, "sale", sale_id, "create", None, data)
         self.session.commit()
@@ -664,7 +670,7 @@ class Repository:
             item["remaining"] = max(Decimal(0), Decimal(target) - sold) if target is not None else None
             item["status"] = "target_reached" if target is not None and sold >= Decimal(target) else "in_progress"
         recent_sales = rows(self.session.execute(text(f"""
-            SELECT s.id,b.code AS book_code,b.title AS book_title,s.sale_date,s.quantity,s.channel,s.notes,
+            SELECT s.id,b.code AS book_code,b.title AS book_title,s.sale_date,s.quantity,s.channel,s.notes,s.from_inventory,
                    COALESCE(e.format_code,'unspecified') AS format_code,s.created_at
             FROM sb2_sales s
             JOIN sb2_books b ON b.id=s.book_id

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
+from .planning import router as planning_router
 from .config import get_settings
 from .version import APP_VERSION
 
@@ -18,6 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(planning_router)
 
 # In locale il frontend continua a essere servito da Vite sulla porta 5173.
 # Durante la build Vercel crea frontend/dist e FastAPI lo pubblica alla radice.

@@ -45,6 +45,7 @@ class InboxCreate(BaseModel):
 
 
 class SaleCreate(BaseModel):
+    from_inventory: bool = False
     book_code: str
     format_code: str = Field(pattern=r"^(ebook|paperback)$")
     quantity: int = Field(gt=0)

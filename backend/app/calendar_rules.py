@@ -14,6 +14,7 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
         SET due_date=NULL,status='open',updated_at=CURRENT_TIMESTAMP
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND due_date<:today AND due_time IS NULL
+          AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
     """), {"uid": user_id, "today": today})
 
     # Un evento senza orario rappresenta un'attività giornaliera. Se scade,
@@ -26,6 +27,7 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
             SET status='completed',updated_at=CURRENT_TIMESTAMP
             WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
               AND event_date<:today AND start_time IS NULL
+              AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
             RETURNING id,user_id,project_id,case_id,author_profile_id,book_id,strategy_id,title
         )
         INSERT INTO sb2_tasks(
@@ -51,6 +53,7 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND due_time IS NOT NULL
           AND due_date<:today
+          AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
     """), {"uid": user_id, "today": today})
 
     session.execute(text("""
@@ -59,5 +62,6 @@ def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND start_time IS NOT NULL
           AND event_date<:today
+          AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
     """), {"uid": user_id, "today": today})
     session.commit()

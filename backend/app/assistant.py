@@ -1,3 +1,4 @@
+from sqlalchemy import text
 import json
 import re
 from datetime import date, time, timedelta
@@ -67,6 +68,19 @@ def date_it(value: date | str | None) -> str:
 async def answer(session: Session, raw_text: str, history: list[dict[str, str]] | None = None) -> dict:
     repo = Repository(session)
     command = normalize(raw_text)
+    if re.search(r"\b(?:apri|aprire|crea|creare|avvia|avviare|inizia|iniziare)\b.*\b(?:una\s+)?(?:nuova\s+)?pratica\b", command):
+        from .planning import model_json
+        proposal = await model_json([
+            {"role":"system","content":"L'utente vuole aprire una pratica personale. Proponi un titolo breve, un riepilogo fedele e massimo tre domande per chiarire obiettivo e vincoli. Non creare attività o una pratica. Non inventare fatti, costi o validità normativa. Restituisci JSON {\"title\":\"...\",\"summary\":\"...\",\"questions\":[\"...\"]}."},
+            {"role":"user","content":raw_text},
+        ])
+        title = str(proposal.get("title") or "Nuova pratica").strip()[:250]
+        questions = proposal.get("questions") or []
+        questions = [str(q) for q in questions[:3]] if isinstance(questions,list) else []
+        existing = session.execute(text("SELECT id FROM sb2_cases WHERE user_id=:uid AND lower(title)=lower(:title) ORDER BY created_at LIMIT 1"), {"uid":repo.user_id(),"title":title}).scalar_one_or_none()
+        summary = str(proposal.get("summary") or raw_text)
+        return {"mode":"llm","kind":"case_proposal","message":summary,
+                "data":{"title":title,"summary":summary,"context_markdown":raw_text+"\n\n"+summary+"\n\nDomande da chiarire:\n"+"\n".join(questions),"questions":questions,"case_id":str(existing) if existing else None}}
     if command == "oggi" or re.fullmatch(r"(?:cosa|che cosa|quali impegni|cosa devo fare) (?:ho )?oggi\??", command):
         return {"mode": "deterministic", "kind": "dashboard", "data": repo.dashboard()}
     if command == "settimana" or re.fullmatch(r"(?:cosa|che cosa|quali impegni) (?:ho )?(?:questa|nella) settimana\??", command):

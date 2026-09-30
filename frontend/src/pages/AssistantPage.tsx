@@ -80,6 +80,11 @@ export function AssistantPage() {
   }
   function structured(message:ChatMessage) {
     const result=messageResult(message); if(!result)return null
+    if(result.kind==='case_proposal') {
+      const data=result.data||{},caseId=typeof data.case_id==='string'?data.case_id:''
+      const open=(id:string)=>window.dispatchEvent(new CustomEvent('second-brain-open-context',{detail:'case:'+id}))
+      return <div className="assistant-result"><header><span>Pratica proposta</span><strong>{String(data.title||'Nuova pratica')}</strong></header><MarkdownView value={String(data.summary||result.message||'')}/><ul>{(Array.isArray(data.questions)?data.questions:[]).map((q,i)=><li key={i}>{String(q)}</li>)}</ul><p>La creazione della pratica non calendarizza attività.</p><button disabled={busy} onClick={()=>{if(caseId){open(caseId);return}setBusy(true);setError('');void post<{id:string}>(`/planning/case-proposals/${message.id}/confirm`).then(async c=>{setMessages(await api<ChatMessage[]>(`/conversations/${active}/messages`));open(c.id)}).catch(e=>setError((e as Error).message)).finally(()=>setBusy(false))}}>{caseId?'Apri pratica esistente':'Conferma creazione e apri pratica'}</button><small>Puoi ignorare questa proposta: finché non confermi non viene creata.</small></div>
+    }
     if(result.kind==='dashboard') {
       const data=result.data as unknown as Dashboard
       const planned=data.tasks?.filter(item=>item.due_date)||[], todos=data.tasks?.filter(item=>!item.due_date)||[]

@@ -194,6 +194,8 @@ def sales(book_code: str | None = None, repository: Repository = Depends(repo)):
 def create_sale(payload: SaleCreate, repository: Repository = Depends(repo)):
     try:
         return repository.add_sale(payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -1,0 +1,19 @@
+.planning-page { align-items:start; }
+.planning-page label { display:block; margin:12px 0; }
+.planning-page label input,.planning-page textarea,.planning-page select { width:100%; box-sizing:border-box; }
+.planning-page textarea { margin:10px 0; resize:vertical; }
+.planning-page button { margin:5px 5px 5px 0; }
+.planning-page .list > button { text-align:left; width:100%; }
+.planning-page details { margin:18px 0; }
+.planning-page summary { cursor:pointer; font-weight:600; }
+.planning-page .row { align-items:flex-start; }
+.planning-page .row small { display:block; }
+.planning-page .notice { grid-column:1/-1; }
+
+.planning-catalog { grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start; }
+.planning-catalog label { display:block;margin:10px 0; }
+.planning-catalog label input,.planning-catalog textarea { width:100%; }
+.planning-catalog .project-body p { white-space:pre-wrap; }
+.financial-detail { border:1px solid #ddd3c5;border-radius:14px;padding:18px;margin:16px 0;background:#fffaf0; }
+.calendar-event.finance,.cal-item.finance { background:#fff4dd;border-color:#e1c57c; }
+@media(max-width:900px){.planning-catalog { grid-template-columns:1fr; }}
