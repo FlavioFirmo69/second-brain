@@ -104,7 +104,8 @@ async def answer(session: Session, raw_text: str, history: list[dict[str, str]] 
         return {"mode": "deterministic", "kind": "calendar_query", "data": data,
                 "message": f"Ho trovato {len(data['tasks'])} attività e {len(data['events'])} eventi collegati a {code}."}
 
-    when = re.search(r"\bquando\b.*\b(?:devo|ho|c(?:'|’)è|e)\b\s*(?:andare\s+)?(?:dal|dalla|al|alla)?\s*(.+?)\??$", command)
+    # Calendar questions must be standalone commands, never fragments of a pasted post.
+    when = re.fullmatch(r"quando\s+(?:devo|ho|c(?:'|’)è)\s+(?:andare\s+)?(?:dal|dalla|al|alla)?\s*([^\n.!?]+)\??", raw_text.strip(), flags=re.IGNORECASE)
     if when:
         keyword = re.sub(r"\b(?:dal|dalla|al|alla)\b", "", when.group(1)).strip()
         if keyword:

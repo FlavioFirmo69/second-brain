@@ -132,7 +132,7 @@ export function AssistantPage() {
         {busy&&<div className="thinking">Sto elaborando…</div>}
         {error&&<p className="notice error">{error}</p>}<div ref={bottom}/>
       </div>
-      <form className="chat-composer" onSubmit={send}><textarea rows={2} value={text} onChange={e=>setText(e.target.value)} onKeyDown={keyDown} placeholder="Scrivi al tuo Second Brain…"/><button disabled={busy||!text.trim()}>Invia</button><small>Invio per spedire · Maiusc+Invio per andare a capo</small></form>
+      <form className="chat-composer" onSubmit={send}><textarea rows={5} value={text} onChange={e=>setText(e.target.value)} onKeyDown={keyDown} placeholder="Scrivi al tuo Second Brain…"/><button disabled={busy||!text.trim()}>Invia</button><small>Invio per spedire · Maiusc+Invio per andare a capo</small></form>
     </section>
   </div>
 }

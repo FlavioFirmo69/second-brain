@@ -362,7 +362,10 @@ main {
   align-items: end;
   margin-top: 18px;
 }
-.movement-form { display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto; gap: 9px; align-items: end; }
+.movement-form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; align-items: end; }
+.movement-form label:nth-child(2) { grid-column: 1 / -1; grid-row: 1; }
+.movement-form > button { justify-self: start; }
+.movement-form input[type="number"] { min-height: 42px; font-variant-numeric: tabular-nums; }
 .movement-form label,.project-create-form label { display: grid; gap: 5px; color: #596172; font-size: 12px; }
 .movement-form input,.movement-form select,.project-create-form input,.project-create-form select,.project-create-form textarea { width: 100%; border: 1px solid #d9d3c9; border-radius: 9px; padding: 9px; background: #fcfbf8; color: #182033; }
 .project-create-form { display: grid; grid-template-columns: repeat(5,minmax(120px,1fr)); gap: 9px; align-items: end; margin-bottom: 15px; padding: 13px; border: 1px solid #e5ded4; border-radius: 11px; background: #fbf9f5; }
@@ -972,6 +975,7 @@ main {
   .sale-row .format-badge { grid-column: 2; }
   .sale-row small { grid-column: 3 / 5; }
   .sale-row .sale-delete { grid-column: 4; grid-row: 1; }
+  .movement-form label:nth-child(2) { grid-column: auto; }
   .project-create-form .wide { grid-column: auto; }
   .book-facts,.book-context,.book-links,.book-edit-form { grid-template-columns: 1fr; }
   .book-edit-form .wide { grid-column: auto; }
