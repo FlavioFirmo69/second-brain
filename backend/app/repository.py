@@ -861,7 +861,8 @@ class Repository:
         """), {"id": conversation_id, "role": role, "content": content, "kind": kind,
                  "metadata": json.dumps(metadata, ensure_ascii=False, default=str) if metadata else None}).mappings().one()
         count = self.session.execute(text("SELECT COUNT(*) FROM sb2_messages WHERE conversation_id=:id AND role='user'"), {"id": conversation_id}).scalar_one()
-        title_sql = ",title=:title" if role == "user" and count == 1 else ""
+        contextual = self.session.execute(text("SELECT book_id IS NOT NULL OR case_id IS NOT NULL FROM sb2_conversations WHERE id=:id"), {"id":conversation_id}).scalar_one()
+        title_sql = ",title=:title" if role == "user" and count == 1 and not contextual else ""
         params = {"id": conversation_id, "title": content.strip().replace("\n", " ")[:80]}
         self.session.execute(text(f"UPDATE sb2_conversations SET updated_at=CURRENT_TIMESTAMP{title_sql} WHERE id=:id"), params)
         self.session.commit()

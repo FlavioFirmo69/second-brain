@@ -8,6 +8,7 @@ from .api import router
 from .planning import router as planning_router
 from .config import get_settings
 from .version import APP_VERSION
+from .work import router as work_router
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version=APP_VERSION)
@@ -19,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+app.include_router(work_router)
 app.include_router(planning_router)
 
 # In locale il frontend continua a essere servito da Vite sulla porta 5173.

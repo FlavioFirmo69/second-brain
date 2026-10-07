@@ -37,7 +37,10 @@ def ensure_editable(item, revision):
 
 def source(session, uid, item):
     if item['case_id']:
-        return owned_case(session, uid, item['case_id'])
+        case = owned_case(session, uid, item['case_id'])
+        if case['status'] in ('closed','completed','cancelled','archived'):
+            raise HTTPException(409, 'Pratica chiusa: non è possibile avviare un piano')
+        return case
     data = session.execute(text('''SELECT b.*,a.code AS author_code,a.display_name AS author_name,
         a.voice_markdown,a.positioning AS author_positioning FROM sb2_books b
         JOIN sb2_author_profiles a ON a.id=b.author_profile_id WHERE b.id=:id AND a.user_id=:uid'''), {'id': item['book_id'], 'uid': uid}).mappings().one_or_none()

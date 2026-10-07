@@ -87,6 +87,11 @@ async def answer(session: Session, raw_text: str, history: list[dict[str, str]] 
         return {"mode": "deterministic", "kind": "week", "data": repo.week()}
     if command in {"saldo", "saldo e movimenti", "movimenti"}:
         return {"mode": "deterministic", "kind": "finance", "data": repo.finance()}
+    if re.fullmatch(r"(?:quante|uante|quali|elenca)(?: sono)? (?:le )?strategie attive(?: ci sono)?\??", command):
+        from .work import overview
+        data = overview(session)
+        names = [s['title'] for c in data['cards'] for s in c['strategies']]
+        return {'mode':'deterministic','kind':'text','message':f"Strategie editoriali attive: {data['strategies_active']}. Piani operativi attivi: {data['plans_active']}.\n"+'\n'.join(names)}
     if command == "comandi":
         return {"mode": "deterministic", "kind": "commands", "data": repo.commands()}
 

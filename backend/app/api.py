@@ -311,7 +311,12 @@ async def create_conversation_message(conversation_id: UUID, payload: AssistantR
         history = [{"role": item["role"], "content": item["content_markdown"]}
                    for item in repository.conversation_messages(conversation_id)]
         user_message = repository.add_conversation_message(conversation_id, "user", payload.text)
-        result = await answer(session, payload.text, history)
+        conversation = session.execute(text('SELECT book_id,case_id FROM sb2_conversations WHERE id=:id AND user_id=:uid'), {'id':conversation_id,'uid':repository.user_id()}).mappings().one()
+        if conversation['book_id'] or conversation['case_id']:
+            from .work import scoped_answer
+            result = await scoped_answer(session, conversation, payload.text, history)
+        else:
+            result = await answer(session, payload.text, history)
         data = result.get("data") or {}
         summaries = {
             "dashboard": "Ecco le attività e gli eventi di oggi.",

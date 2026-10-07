@@ -4,6 +4,7 @@ import { MarkdownView } from '../components/MarkdownView'
 import { formatDate } from '../date'
 import type { ChatMessage, ChatResponse, Conversation, Dashboard, EventItem, Finance, Task } from '../types'
 
+type WorkAction={kind:'task'|'event';title:string;date:string|null;start_time:string|null;end_time:string|null;location:string|null;priority:number}
 type StructuredResult={kind:string;message?:string;data?:Record<string,unknown>}
 
 function messageResult(message:ChatMessage):StructuredResult|null {
@@ -11,7 +12,7 @@ function messageResult(message:ChatMessage):StructuredResult|null {
   return value&&typeof value==='object' ? value as StructuredResult : null
 }
 
-export function AssistantPage() {
+export function AssistantPage({initialConversation=''}:{initialConversation?:string}) {
   const [conversations,setConversations] = useState<Conversation[]>([])
   const [active,setActive] = useState('')
   const [messages,setMessages] = useState<ChatMessage[]>([])
@@ -21,14 +22,15 @@ export function AssistantPage() {
   const [copied,setCopied] = useState('')
   const bottom = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { void loadConversations() }, [])
+  useEffect(() => { void loadConversations() }, [initialConversation])
   useEffect(() => { bottom.current?.scrollIntoView({behavior:'smooth'}) }, [messages,busy])
 
   async function loadConversations() {
     try {
       const items = await api<Conversation[]>('/conversations')
       setConversations(items)
-      if (items[0]) await choose(items[0].id)
+      if(initialConversation&&items.some(i=>i.id===initialConversation)) await choose(initialConversation)
+      else if (items[0]) await choose(items[0].id)
     } catch (e) { setError((e as Error).message) }
   }
   async function choose(id:string) {
@@ -80,6 +82,10 @@ export function AssistantPage() {
   }
   function structured(message:ChatMessage) {
     const result=messageResult(message); if(!result)return null
+    if(result.kind==='work_actions') {
+      const data=result.data||{}
+      return <WorkActions key={message.id} messageId={message.id} data={data} text={result.message||message.content_markdown} onConfirmed={async()=>setMessages(await api<ChatMessage[]>(`/conversations/${active}/messages`))}/>
+    }
     if(result.kind==='case_proposal') {
       const data=result.data||{},caseId=typeof data.case_id==='string'?data.case_id:''
       const open=(id:string)=>window.dispatchEvent(new CustomEvent('second-brain-open-context',{detail:'case:'+id}))
@@ -139,4 +145,12 @@ export function AssistantPage() {
 
 function AgendaRow({time,title,detail,onDone}:{time:string;title:string;detail?:string;onDone?:()=>void}) {
   return <div className="assistant-agenda-row"><time>{time}</time><div><strong>{title}</strong>{detail&&<small>{detail}</small>}</div>{onDone&&<button onClick={onDone} title="Segna come fatto" aria-label={`Segna come fatto ${title}`}><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></button>}</div>
+}
+
+function WorkActions({messageId,data,text,onConfirmed}:{messageId:string;data:Record<string,unknown>;text:string;onConfirmed:()=>Promise<void>}){
+ const [actions,setActions]=useState<WorkAction[]>(Array.isArray(data.actions)?data.actions as WorkAction[]:[])
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[done,setDone]=useState(Boolean(data.applied))
+ function edit(i:number,value:Partial<WorkAction>){setActions(current=>current.map((a,n)=>n===i?{...a,...value}:a))}
+ async function confirm(e:React.FormEvent){e.preventDefault();if(busy||done)return;setBusy(true);setError('');try{await post(`/work/messages/${messageId}/confirm-actions`,{actions});setDone(true);await onConfirmed()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ return <div className="assistant-result"><header><strong>{String(data.context_title||'Lavoro')} · {done?'Inserimenti confermati':'Proposta operativa'}</strong></header><MarkdownView value={text}/><form onSubmit={confirm}>{actions.map((a,i)=><fieldset disabled={busy||done} key={i}><legend>{a.kind==='event'?'Evento':'Attività'}: {a.title}</legend><label>Data<input type="date" required={a.kind==='event'||Boolean(a.start_time)} value={a.date||''} onChange={e=>edit(i,{date:e.target.value||null})}/></label><label>Ora di inizio<input type="time" value={a.start_time||''} onChange={e=>edit(i,{start_time:e.target.value||null})}/></label>{a.kind==='event'&&<><label>Ora di fine<input type="time" value={a.end_time||''} onChange={e=>edit(i,{end_time:e.target.value||null})}/></label><label>Luogo<input value={a.location||''} onChange={e=>edit(i,{location:e.target.value||null})}/></label></>}</fieldset>)}{error&&<p role="alert" className="notice error">{error}</p>}{done?<p>Inseriti nel sistema e collegati a questo lavoro. Le attività senza data sono TODO.</p>:<><p>Completa le date degli eventi. Confermando, tutti gli elementi saranno inseriti e collegati a questo lavoro.</p><button className="primary" disabled={busy||!actions.length}>{busy?'Inserimento…':'Conferma e inserisci'}</button></>}</form></div>
 }

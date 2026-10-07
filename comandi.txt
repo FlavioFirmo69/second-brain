@@ -4,7 +4,7 @@ cd C:\Sorgenti\second-brain
 
 git status
 git add .
-git commit -m "Aggiorna Second Brain alla versione 0.26.0"
+git commit -m "Aggiorna Second Brain alla versione 0.27.0"
 git push origin main
 
 Questo ZIP contiene la versione corrente e funzionante del progetto Second Brain, versione 0.22.0.
