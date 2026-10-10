@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from app import planning
-from app.calendar_rules import apply_calendar_rules
+from app.calendar_rules import apply_calendar_rules, convert_past_project_book_events
 from app.repository import Repository
 from app.planning_models import CaseInput, PlanInput, DraftInput, RevisionInput, TurnInput, CoverageInput
 from app.schemas import TaskCreate, EventCreate
@@ -104,13 +104,18 @@ def test_stale_revision_rejected(db):
     s.rollback()
 
 
-def test_contextual_overdue_not_automatically_completed(db):
+def test_contextual_overdue_task_kept_event_becomes_todo(db):
     s,uid=db;c,p=case_plan(s)
     task=planning.manual_task(c['id'],TaskCreate(title='Da fare',due_date=date(2026,11,1),due_time='10:00'),s)
     event=planning.manual_event(c['id'],EventCreate(title='Appuntamento',event_date=date(2026,11,1),start_time='10:00'),s)
     apply_calendar_rules(s,uid,datetime(2026,11,15,12))
     assert s.execute(text('SELECT status FROM sb2_tasks WHERE id=:id'),{'id':task['id']}).scalar()=='planned'
-    assert s.execute(text('SELECT status FROM sb2_events WHERE id=:id'),{'id':event['id']}).scalar()=='planned'
+    # L'evento passato di una pratica non viene perso: si chiude e diventa un TODO collegato alla pratica.
+    assert s.execute(text('SELECT status FROM sb2_events WHERE id=:id'),{'id':event['id']}).scalar()=='completed'
+    todos=s.execute(text("SELECT case_id,due_date,status FROM sb2_tasks WHERE description=:d AND source='calendar_rollover'"),{'d':'calendar_event:'+str(event['id'])}).all()
+    assert len(todos)==1 and todos[0][0]==c['id'] and todos[0][1] is None and todos[0][2]=='open'
+    apply_calendar_rules(s,uid,datetime(2026,11,15,12))
+    assert s.execute(text("SELECT count(*) FROM sb2_tasks WHERE description=:d"),{'d':'calendar_event:'+str(event['id'])}).scalar()==1
 
 
 def test_book_monitor_correction_and_tree_clean(db):
@@ -232,3 +237,29 @@ def test_inventory_purchase_sale_and_delete(db):
     assert planning.inventory(s)['items'][0]['available']==30
     planning.delete_stock(purchase['id'],s)
     assert planning.inventory(s)['items'][0]['available']==0
+
+
+def test_startup_converts_past_project_and_book_events(db):
+    s,uid=db;c,p=case_plan(s)
+    project=s.execute(text("INSERT INTO sb2_projects(user_id,code,title,status) VALUES(:u,:c,'Progetto','active') RETURNING id"),{'u':uid,'c':str(uuid4())}).scalar()
+    author=s.execute(text("INSERT INTO sb2_author_profiles(user_id,code,display_name) VALUES(:u,:c,'Autore') RETURNING id"),{'u':uid,'c':str(uuid4())}).scalar()
+    book=s.execute(text("INSERT INTO sb2_books(author_profile_id,code,title,status) VALUES(:a,:c,'Libro','draft') RETURNING id"),{'a':author,'c':str(uuid4())}).scalar()
+    def ev(title,day,start=None,status='planned',**links):
+        cols=['user_id','title','event_date','start_time','status']+list(links)
+        vals={'user_id':uid,'title':title,'event_date':day,'start_time':start,'status':status,**links}
+        return s.execute(text(f"INSERT INTO sb2_events({','.join(cols)}) VALUES({','.join(':'+k for k in cols)}) RETURNING id"),vals).scalar()
+    old=date(2026,11,1)
+    converted=[ev('Prj con ora',old,'10:00',project_id=project),ev('Prj senza ora',old,project_id=project),
+               ev('Libro con ora',old,'10:00',book_id=book),ev('Libro senza ora',old,book_id=book)]
+    untouched=[ev('Del piano',old,'10:00',book_id=book,plan_id=p['id']),ev('Futuro',date(2026,12,1),project_id=project),
+               ev('Oggi',date(2026,11,15),'09:00',project_id=project)]
+    ev('Già annullato',old,project_id=project,status='cancelled');s.commit()
+    assert convert_past_project_book_events(s,uid,datetime(2026,11,15,12))==4
+    for i in converted:
+        assert s.execute(text('SELECT status FROM sb2_events WHERE id=:i'),{'i':i}).scalar()=='completed'
+        todo=s.execute(text("SELECT project_id,book_id,due_date,status FROM sb2_tasks WHERE description=:d"),{'d':'calendar_event:'+str(i)}).one()
+        assert todo[2] is None and todo[3]=='open' and (todo[0]==project or todo[1]==book)
+    for i in untouched:
+        assert s.execute(text('SELECT status FROM sb2_events WHERE id=:i'),{'i':i}).scalar()=='planned'
+    assert convert_past_project_book_events(s,uid,datetime(2026,11,15,12))==0
+    assert s.execute(text("SELECT count(*) FROM sb2_tasks WHERE source='calendar_rollover' AND user_id=:u"),{'u':uid}).scalar()==4
