@@ -1058,3 +1058,7 @@ main {
 }
 
 .work-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}.work-metrics{display:flex;flex-wrap:wrap;gap:16px}.work-dashboard .form-buttons{flex-wrap:wrap}
+
+/* Finance actions remain accessible on narrow screens. */
+.finance-row { flex-wrap: wrap; }
+.finance-row > button { flex-shrink: 0; }

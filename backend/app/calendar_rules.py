@@ -12,14 +12,14 @@ _EVENTS_TO_TODOS = """
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND event_date<:today
           AND ({condition})
-        RETURNING id,user_id,project_id,case_id,author_profile_id,book_id,strategy_id,title
+        RETURNING id,user_id,project_id,case_id,author_profile_id,book_id,strategy_id,plan_id,title
     )
     INSERT INTO sb2_tasks(
-        user_id,project_id,case_id,author_profile_id,book_id,strategy_id,
+        user_id,project_id,case_id,author_profile_id,book_id,strategy_id,plan_id,
         title,description,status,priority,due_date,due_time,source
     )
     SELECT
-        e.user_id,e.project_id,e.case_id,e.author_profile_id,e.book_id,e.strategy_id,
+        e.user_id,e.project_id,e.case_id,e.author_profile_id,e.book_id,e.strategy_id,e.plan_id,
         e.title,'calendar_event:' || e.id::text,'open',3,NULL,NULL,'calendar_rollover'
     FROM expired_events e
     WHERE NOT EXISTS (
@@ -45,56 +45,45 @@ def _events_to_todos(session: Session, user_id: UUID, today, condition: str) -> 
 
 
 def convert_past_project_book_events(session: Session, user_id: UUID, now: datetime) -> int:
-    """Conversione eseguita all'avvio: ogni evento passato ancora aperto collegato a un
-    progetto o a un libro (con o senza orario) viene chiuso e diventa un TODO senza data
-    con gli stessi collegamenti. Gli eventi generati da piani o strategie sono esclusi:
-    il monitoraggio li usa per segnalare i ritardi. Restituisce i TODO creati."""
-    created = _events_to_todos(
-        session, user_id, now.date(),
-        "(project_id IS NOT NULL OR book_id IS NOT NULL) AND plan_id IS NULL AND strategy_id IS NULL",
-    )
+    """Compatibility entry point: convert overdue untimed events in every context."""
+    created = _events_to_todos(session, user_id, now.date(), "start_time IS NULL")
     session.commit()
     return created
 
 
 def apply_calendar_rules(session: Session, user_id: UUID, now: datetime) -> None:
-    """Apply predictable calendar housekeeping without involving the LLM."""
-    today = now.date()
+    """Check all historical records, using the application's local date.
 
+    Rollover is atomic and repeatable; linked timed events stay in their context.
+    """
+    params = {"uid": user_id, "today": now.date()}
     session.execute(text("""
         UPDATE sb2_tasks
         SET due_date=NULL,status='open',updated_at=CURRENT_TIMESTAMP
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
           AND due_date<:today AND due_time IS NULL
-          AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
-    """), {"uid": user_id, "today": today})
+    """), params)
 
-    # Un evento senza orario rappresenta un'attività giornaliera. Se scade,
-    # diventa un TODO senza data conservando gli eventuali collegamenti.
-    # Gli eventi passati di una pratica (con o senza orario) non vanno persi:
-    # diventano TODO collegati alla pratica. Gli eventi generati da un
-    # piano/strategia restano gestiti dal modulo di pianificazione.
-    _events_to_todos(session, user_id, today, """
-        (start_time IS NULL
-         AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0)
-     OR (case_id IS NOT NULL AND plan_id IS NULL AND strategy_id IS NULL)
-    """)
+    _events_to_todos(session, user_id, now.date(), "start_time IS NULL")
 
     session.execute(text("""
         UPDATE sb2_tasks
         SET status='completed',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
         WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
-          AND due_time IS NOT NULL
-          AND due_date<:today
+          AND due_time IS NOT NULL AND due_date<:today
           AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
-    """), {"uid": user_id, "today": today})
+    """), params)
 
     session.execute(text("""
-        UPDATE sb2_events
-        SET status='completed',updated_at=CURRENT_TIMESTAMP
-        WHERE user_id=:uid AND status NOT IN ('completed','cancelled')
-          AND start_time IS NOT NULL
-          AND event_date<:today
+        DELETE FROM sb2_events
+        WHERE user_id=:uid
           AND num_nonnulls(strategy_id,plan_id,project_id,case_id,book_id)=0
-    """), {"uid": user_id, "today": today})
+          AND (status='completed'
+               OR (status NOT IN ('completed','cancelled')
+                   AND start_time IS NOT NULL AND event_date<:today))
+    """), params)
+    session.execute(text("""
+        DELETE FROM sb2_transactions
+        WHERE user_id=:uid AND transaction_date<:today
+    """), params)
     session.commit()

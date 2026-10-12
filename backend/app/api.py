@@ -229,6 +229,16 @@ def create_transaction(payload: TransactionCreate, repository: Repository = Depe
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post("/finance/transactions/{transaction_id}/confirm")
+def confirm_transaction(transaction_id: UUID, repository: Repository = Depends(repo)):
+    try:
+        return repository.confirm_transaction(transaction_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/inbox")
 def inbox(repository: Repository = Depends(repo)):
     return repository.inbox()

@@ -331,10 +331,16 @@ class Repository:
         ).mappings().one_or_none()
         if before is None:
             raise KeyError("Evento non trovato")
-        self.session.execute(text("""
-            UPDATE sb2_events SET status=:status,updated_at=CURRENT_TIMESTAMP
-            WHERE id=:id AND user_id=:uid
-        """), {"id": event_id, "uid": uid, "status": next_status})
+        linked = any(before.get(key) is not None for key in
+                     ("project_id", "case_id", "book_id", "plan_id", "strategy_id"))
+        if next_status == "completed" and not linked:
+            self.session.execute(text("DELETE FROM sb2_events WHERE id=:id AND user_id=:uid"),
+                                 {"id": event_id, "uid": uid})
+        else:
+            self.session.execute(text("""
+                UPDATE sb2_events SET status=:status,updated_at=CURRENT_TIMESTAMP
+                WHERE id=:id AND user_id=:uid
+            """), {"id": event_id, "uid": uid, "status": next_status})
         self.log(uid, "event", event_id, action, dict(before), {"status": next_status})
         self.session.commit()
 
@@ -700,6 +706,7 @@ class Repository:
         self.session.commit()
 
     def finance(self) -> dict[str, Any]:
+        self.apply_calendar_rules()
         uid = self.user_id()
         account = self.session.execute(text("SELECT id,code,display_name FROM sb2_accounts WHERE user_id=:uid AND code='ING_CURRENT' LIMIT 1"), {"uid": uid}).mappings().one()
         balance = self.session.execute(text("""
@@ -708,9 +715,9 @@ class Repository:
         """), {"account": account["id"]}).mappings().one_or_none()
         planned = rows(self.session.execute(text("""
             SELECT id,transaction_date,description,amount,status FROM sb2_transactions
-            WHERE account_id=:account AND status='planned' AND transaction_date>=:today
-            ORDER BY transaction_date
-        """), {"account": account["id"], "today": self.today()}))
+            WHERE account_id=:account AND status='planned'
+            ORDER BY transaction_date,created_at,id
+        """), {"account": account["id"]}))
         running = Decimal(balance["balance"]) if balance else Decimal(0)
         for movement in planned:
             running += Decimal(movement["amount"])
@@ -748,6 +755,30 @@ class Repository:
         self.log(uid, "transaction", transaction_id, "create", None, data)
         self.session.commit()
         return {"id": transaction_id, "status": "planned", **data}
+
+    def confirm_transaction(self, transaction_id: UUID) -> dict[str, Any]:
+        uid = self.user_id()
+        before = self.session.execute(text("""
+            SELECT t.* FROM sb2_transactions t
+            JOIN sb2_accounts a ON a.id=t.account_id
+            WHERE t.id=:id AND t.user_id=:uid AND a.user_id=:uid
+            FOR UPDATE OF t
+        """), {"id": transaction_id, "uid": uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError("Movimento non trovato")
+        if before["status"] == "confirmed":
+            self.session.commit()
+            return dict(before)
+        if before["status"] != "planned":
+            raise ValueError("Il movimento non è pianificato")
+        after = self.session.execute(text("""
+            UPDATE sb2_transactions SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP
+            WHERE id=:id AND user_id=:uid
+            RETURNING *
+        """), {"id": transaction_id, "uid": uid}).mappings().one()
+        self.log(uid, "transaction", transaction_id, "confirm", dict(before), dict(after))
+        self.session.commit()
+        return dict(after)
 
     def inbox(self) -> list[dict[str, Any]]:
         items = rows(self.session.execute(text("SELECT id,source,text,status,created_at,processed_at FROM sb2_inbox WHERE user_id=:uid AND status<>'cancelled' ORDER BY created_at DESC"), {"uid": self.user_id()}))
