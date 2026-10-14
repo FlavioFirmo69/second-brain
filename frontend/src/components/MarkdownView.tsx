@@ -12,7 +12,11 @@ function inline(value: string): ReactNode[] {
 }
 
 export function MarkdownView({ value }: { value: string }) {
-  const blocks = value.replace(/\\n/g, '\n').split(/\n{2,}/).filter(Boolean)
+  const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+  const readable=value
+    .replace(new RegExp('\\(\\s*(?:(?:riferimento|id|uuid)\\s*:?\\s*)?`?'+uuid+'`?\\s*\\)','gi'),'')
+    .replace(new RegExp('`'+uuid+'`','gi'),'')
+  const blocks = readable.replace(/\\n/g, '\n').split(/\n{2,}/).filter(Boolean)
   return <div className="markdown-view">{blocks.map((block, index) => {
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean)
     const heading = lines[0]?.match(/^(#{1,4})\s+(.+)/)

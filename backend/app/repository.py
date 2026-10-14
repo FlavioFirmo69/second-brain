@@ -138,6 +138,26 @@ class Repository:
         self.log(uid, "task", task_id, "complete", dict(before), {"status": "completed"})
         self.session.commit()
 
+    def delete_task(self, task_id: UUID, *, incorrect_information: bool = False, reason: str = '') -> None:
+        uid = self.user_id()
+        before = self.session.execute(text("SELECT * FROM sb2_tasks WHERE id=:id AND user_id=:uid AND status<>'cancelled' FOR UPDATE"),
+                                      {'id': task_id, 'uid': uid}).mappings().one_or_none()
+        if before is None:
+            raise KeyError('Attività non trovata')
+        self.session.execute(text("UPDATE sb2_tasks SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=:id AND user_id=:uid"),
+                             {'id': task_id, 'uid': uid})
+        self.log(uid, 'task', task_id, 'delete', dict(before), {
+            'status': 'cancelled', 'incorrect_information': incorrect_information,
+            'reason': reason.strip(), 'invalidates_completion_evidence': True})
+        self.session.commit()
+
+    def completed_past_tasks(self) -> list[dict[str, Any]]:
+        return rows(self.session.execute(text('''SELECT id,title,status,due_date,due_time,completed_at,
+            project_id,case_id,book_id,plan_id FROM sb2_tasks
+            WHERE user_id=:uid AND status='completed' AND due_date<:today
+            ORDER BY due_date DESC,due_time DESC NULLS LAST,id'''),
+            {'uid':self.user_id(),'today':self.today()}))
+
     def schedule_task(self, task_id: UUID, due_date: date, due_time: time | None = None) -> dict[str, Any]:
         uid = self.user_id()
         before = self.session.execute(text("""

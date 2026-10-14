@@ -107,9 +107,16 @@ export function AssistantPage({initialConversation=''}:{initialConversation?:str
     if(result.kind==='calendar_query') {
       const data=result.data as {title?:string;tasks:Task[];events:EventItem[]}
       const total=(data.events?.length||0)+(data.tasks?.length||0)
+      const calendarItems=[
+        ...(data.events||[]).map(item=>({id:item.id,kind:'event' as const,date:item.event_date,time:item.start_time,
+          label:`${formatDate(item.event_date)} · ${item.start_time?.slice(0,5)||'Tutto il giorno'}${item.end_time?`–${item.end_time.slice(0,5)}`:''}`,
+          title:item.title,detail:[item.location,item.project_title||item.case_title].filter(Boolean).join(' · ')})),
+        ...(data.tasks||[]).map(item=>({id:item.id,kind:'task' as const,date:item.due_date,time:item.due_time,
+          label:item.due_date?`${formatDate(item.due_date)}${item.due_time?` · ${item.due_time.slice(0,5)}`:''}`:'TODO',
+          title:item.title,detail:item.project_title||item.case_title})),
+      ].sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(a.time||'99:99').localeCompare(b.time||'99:99')||a.title.localeCompare(b.title))
       return <div className="assistant-result"><header><span>{data.title||'Calendario'}</span><strong>{total} risultat{total===1?'o':'i'}</strong></header><div className="assistant-agenda">
-        {data.events?.map(item=><AgendaRow key={`event-${item.id}`} time={`${formatDate(item.event_date)} · ${item.start_time?.slice(0,5)||'Tutto il giorno'}${item.end_time?`–${item.end_time.slice(0,5)}`:''}`} title={item.title} detail={[item.location,item.project_title||item.case_title].filter(Boolean).join(' · ')} onDone={()=>void completeCalendarItem(message.id,'event',item.id)}/>)}
-        {data.tasks?.map(item=><AgendaRow key={`task-${item.id}`} time={item.due_date?`${formatDate(item.due_date)}${item.due_time?` · ${item.due_time.slice(0,5)}`:''}`:'TODO'} title={item.title} detail={item.project_title||item.case_title} onDone={()=>void completeCalendarItem(message.id,'task',item.id)}/>)}
+        {calendarItems.map(item=><AgendaRow key={`${item.kind}-${item.id}`} time={item.label} title={item.title} detail={item.detail} onDone={()=>void completeCalendarItem(message.id,item.kind,item.id)}/>)}
         {total===0&&<p className="empty-result">Nessun elemento trovato.</p>}
       </div></div>
     }

@@ -1,0 +1,32 @@
+import asyncio
+import json
+from uuid import uuid4
+import pytest
+from app import work
+
+@pytest.mark.parametrize('prompt',[
+    'Scrivi il testo per Substack: Kanban',
+    'Prepara una bozza articolo per Rubicone',
+    'Vorrei il testo completo della newsletter'])
+def test_article_request_is_recognized(prompt):assert work.is_article_request(prompt)
+
+def test_calendar_question_is_not_article_request():
+    assert not work.is_article_request('Quando devo pubblicare su Substack?')
+
+def test_rubicone_scoped_chat_generates_article_with_cesare_profile_and_copy_metadata(monkeypatch):
+    bid=uuid4()
+    monkeypatch.setattr(work,'context',lambda *a:{'id':bid,'title':'Rubicone','author_profile_id':'cesare'})
+    monkeypatch.setattr(work,'overview',lambda *a:(_ for _ in ()).throw(AssertionError('Not a calendar request')))
+    data={'book':{'title':'Rubicone'},'author':{'code':'CESARE','voice_markdown':'Diretto, concreto, senza retorica'},
+          'strategies':[{'content_markdown':'Lean: rendere visibili le contraddizioni organizzative'}],
+          'tasks':[{'title':'Substack: Kanban — rendere visibile il lavoro che tutti fingono di controllare'}]}
+    monkeypatch.setattr(work,'editorial_context',lambda *a:data)
+    async def complete(messages,**kwargs):
+        assert 'Diretto, concreto, senza retorica' in messages[0]['content']
+        assert 'Lean: rendere visibili' in messages[0]['content']
+        return json.dumps({'title':'Kanban','subtitle':'Rendere visibile il lavoro','content_markdown':'Testo completo nella voce di Cesare. '*20})
+    monkeypatch.setattr(work,'complete',complete)
+    result=asyncio.run(work.scoped_answer(None,{'book_id':bid,'case_id':None},'Scrivi il testo completo per Substack',[]))
+    assert result['kind']=='article'
+    assert result['data']['author_code']=='CESARE'
+    assert 'content_markdown' in result['data'] and 'actions' not in result['data']

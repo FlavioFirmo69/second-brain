@@ -1,4 +1,4 @@
-export type Task = { id: string; title: string; status: string; priority: number; due_date?: string; due_time?: string; project_id?: string; project_code?: string; project_title?: string; case_id?: string; case_code?: string; case_title?: string }
+export type Task = { book_id?:string; plan_id?:string; id: string; title: string; status: string; priority: number; due_date?: string; due_time?: string; project_id?: string; project_code?: string; project_title?: string; case_id?: string; case_code?: string; case_title?: string }
 export type EventItem = { id: string; title: string; event_date: string; start_time?: string; end_time?: string; location?: string; event_type: string; status: string; project_id?: string; project_code?: string; project_title?: string; case_id?: string; case_code?: string; case_title?: string }
 export type Dashboard = { date: string; tasks: Task[]; events: EventItem[] }
 export type Profile = { id: string; code: string; display_name: string; is_pseudonym: boolean; positioning: string; voice_markdown: string; privacy_markdown: string }

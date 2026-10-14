@@ -58,6 +58,10 @@ def list_tasks(repository: Repository = Depends(repo)):
 def create_task(payload: TaskCreate, repository: Repository = Depends(repo)):
     return repository.create_task(payload.model_dump())
 
+@router.get('/tasks/completed-past')
+def completed_past_tasks(repository: Repository = Depends(repo)):
+    return repository.completed_past_tasks()
+
 
 @router.post("/tasks/{task_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
 def complete_task(task_id: UUID, repository: Repository = Depends(repo)):
@@ -66,6 +70,14 @@ def complete_task(task_id: UUID, repository: Repository = Depends(repo)):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+
+@router.delete('/tasks/{task_id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: UUID, incorrect_information: bool = Query(default=False),
+                reason: str = Query(default='', max_length=1000), repository: Repository = Depends(repo)):
+    try:
+        repository.delete_task(task_id, incorrect_information=incorrect_information, reason=reason)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 @router.patch("/tasks/{task_id}/schedule")
 def schedule_task(task_id: UUID, payload: TaskSchedule, repository: Repository = Depends(repo)):
@@ -318,8 +330,11 @@ def conversation_messages(conversation_id: UUID, repository: Repository = Depend
 async def create_conversation_message(conversation_id: UUID, payload: AssistantRequest, session: Session = Depends(get_session)):
     repository = Repository(session)
     try:
+        existing_messages = repository.conversation_messages(conversation_id)
+        if any(item['message_kind'] in ('strategic_advice','strategic_diary','strategic_question') for item in existing_messages):
+            raise HTTPException(409, 'Continua questa conversazione dalla pagina Consulente strategico')
         history = [{"role": item["role"], "content": item["content_markdown"]}
-                   for item in repository.conversation_messages(conversation_id)]
+                   for item in existing_messages]
         user_message = repository.add_conversation_message(conversation_id, "user", payload.text)
         conversation = session.execute(text('SELECT book_id,case_id FROM sb2_conversations WHERE id=:id AND user_id=:uid'), {'id':conversation_id,'uid':repository.user_id()}).mappings().one()
         if conversation['book_id'] or conversation['case_id']:
