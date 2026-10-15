@@ -121,7 +121,7 @@ async def scoped_answer(session, conversation, prompt, history):
 
 def is_article_request(prompt):
     value=prompt.casefold()
-    return bool(re.search(r'\b(?:articolo|substack|newsletter)\b',value)
+    return bool(re.search(r'\b(?:articolo|substack|newsletter|mailing|email)\b',value)
                 and re.search(r'\b(?:scrivi|scrivere|scrivimi|redigi|redigere|bozza|prepara|generare|genera|testo)\b',value))
 
 class ArticleDraft(BaseModel):
@@ -144,11 +144,14 @@ def editorial_context(session,item):
         AND book_id=:book AND status='active' ORDER BY created_at DESC'''),args))
     return {'book':item,'author':profile,'strategies':strategies,'tasks':tasks,'plans':plans}
 
-async def draft_book_article(session,item,prompt,history):
-    data=editorial_context(session,item)
+async def draft_book_article(session,item,prompt,history,data=None):
+    data=data if data is not None else editorial_context(session,item)
+    mailing=bool(re.search(r'\b(?:mailing|email)\b',prompt.casefold()))
     try:
         raw=await complete([{'role':'system','content':
-            'Sei l’assistente editoriale del libro indicato. Scrivi il testo completo richiesto per Substack '
+            'Sei l’assistente editoriale del progetto indicato. Scrivi il contenuto completo richiesto per il canale indicato. '
+            + ('Per la mailing list scrivi una email pronta da copiare: title contiene l’oggetto, subtitle un preheader facoltativo, content_markdown il corpo completo. Non scrivere un articolo Substack al posto della mail. '
+               if mailing else 'Scrivi un articolo completo pronto per Substack. ')+
             'nella voce del profilo autore collegato, usando profilo, libro, strategie, piani e attività ufficiali forniti. '
             'Non proporre attività o calendario al posto del testo. Il profilo è disponibile nei dati: '
             'non dichiarare di non averlo. Mantieni distinte le identità degli autori. '
@@ -163,11 +166,44 @@ async def draft_book_article(session,item,prompt,history):
         cleaned=re.sub(r'^```(?:json)?\s*|\s*```$','',raw.strip(),flags=re.IGNORECASE)
         draft=ArticleDraft.model_validate(json.loads(cleaned))
         return {'mode':'llm','kind':'article','message':'Bozza articolo generata.',
-                'data':{**draft.model_dump(),'author_code':data['author']['code']}}
+                'data':{**draft.model_dump(),'author_code':data['author']['code'],'content_format':'email' if mailing else 'article'}}
     except LlmUnavailable as exc:
         return {'mode':'queued','kind':'text','message':'Impossibile generare la bozza. '+str(exc)}
     except (ValueError,TypeError):
         return {'mode':'llm','kind':'text','message':'Il modello non ha restituito un articolo completo nel formato previsto. Riprova: nessuna attività è stata creata.'}
+
+@router.post('/tasks/{identity}/draft')
+async def draft_task_content(identity:UUID,session:Session=Depends(get_session)):
+    repo=Repository(session);uid=repo.user_id()
+    task=session.execute(text('''SELECT t.*,p.title AS project_title,p.objective,p.notes_markdown,
+        COALESCE(t.book_id,p.book_id) AS linked_book_id,
+        COALESCE(t.author_profile_id,p.author_profile_id,b.author_profile_id) AS linked_author_id
+        FROM sb2_tasks t LEFT JOIN sb2_projects p ON p.id=t.project_id AND p.user_id=:uid
+        LEFT JOIN sb2_books b ON b.id=COALESCE(t.book_id,p.book_id)
+        WHERE t.user_id=:uid AND t.id=:id AND t.status<>'cancelled' '''),{'uid':uid,'id':identity}).mappings().one_or_none()
+    if task is None:raise HTTPException(404,'Attività non trovata')
+    task=dict(task)
+    if not re.search(r'\b(?:substack|mailing|newsletter|email|blog|articolo)\b',task['title'].casefold()):
+        raise HTTPException(422,'Questa attività non indica un contenuto editoriale da scrivere')
+    if task['linked_book_id']:
+        item=context(session,'book',task['linked_book_id'])
+        data=editorial_context(session,item)
+    else:
+        author=next((p for p in repo.profiles() if p['id']==task['linked_author_id']),None)
+        if author is None:raise HTTPException(409,'Collega un profilo autore al progetto prima di generare il testo.')
+        strategies=rows(session.execute(text('''SELECT title,content_markdown FROM sb2_strategies
+            WHERE user_id=:uid AND author_profile_id=:author AND book_id IS NULL AND status='active' '''),
+            {'uid':uid,'author':author['id']}))
+        item={'title':task['project_title'] or task['title']}
+        data={'project':item,'objective':task['objective'],'notes':task['notes_markdown'],'author':author,'strategies':strategies}
+    data['requested_task']=task
+    prompt='Scrivi il testo completo pronto da copiare per questa attività: '+task['title']
+    result=await draft_book_article(session,item,prompt,[],data=data)
+    if result['kind']!='article':raise HTTPException(503,result['message'])
+    cid=repo.create_conversation('Bozza: '+task['title'])['id']
+    repo.add_conversation_message(cid,'user',prompt+'\nProgetto: '+str(task['project_title'] or item['title']))
+    repo.add_conversation_message(cid,'assistant',result['data']['content_markdown'],'article',result['data'])
+    return {'conversation_id':cid}
 
 class WorkAction(BaseModel):
     kind: Literal['task','event']

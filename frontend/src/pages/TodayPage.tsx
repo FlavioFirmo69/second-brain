@@ -15,6 +15,13 @@ export function TodayPage() {
   const [data, setData] = useState<Dashboard | null>(null)
   const [week,setWeek]=useState<WeekData|null>(null)
   const [message, setMessage] = useState('')
+  const [drafting,setDrafting]=useState('')
+  async function draft(task:Task){
+    setDrafting(task.id);setMessage('')
+    try{const result=await post<{conversation_id:string}>(`/work/tasks/${task.id}/draft`);window.dispatchEvent(new CustomEvent('second-brain-open-chat',{detail:result.conversation_id}))}
+    catch(e){setMessage((e as Error).message)}finally{setDrafting('')}
+  }
+  const writeButton=(task:Task)=>/\b(substack|mailing|newsletter|email|blog|articolo)\b/i.test(task.title)?<button disabled={!!drafting} onClick={()=>void draft(task)}>{drafting===task.id?'Sto scrivendo…':'Scrivi testo'}</button>:null
   const load=()=>Promise.all([api<Dashboard>('/dashboard/today'),api<WeekData>('/dashboard/week')]).then(([day,weekData])=>{setData(day);setWeek(weekData)}).catch(e=>setMessage(e.message))
   useEffect(() => { void load() }, [])
 
@@ -35,8 +42,8 @@ export function TodayPage() {
       await load()
     }catch(error){setMessage(error instanceof Error?error.message:'Impossibile pianificare l’attività')}
   }
-  const row=(item:AgendaItem)=><article key={`${item.kind}-${item.id}`} className="row today-row"><time>{item.time||'—'}</time><div><strong>{item.title}</strong>{item.detail&&<small>{item.detail}</small>}</div><button className="done-icon" onClick={()=>void complete(item)} title="Segna come fatto" aria-label={`Segna come fatto ${item.title}`}>✓</button></article>
-  const todoRow=(item:Task)=><article key={item.id} className="row today-row todo-row"><div className="todo-description"><strong>{item.title}</strong>{(item.project_title||item.case_title)&&<small>{item.project_title||item.case_title}</small>}</div><form className="todo-schedule" onSubmit={event=>void schedule(item,event)}><input type="date" name="due_date" required aria-label={`Data per ${item.title}`}/><button type="submit" title="Assegna data" aria-label={`Assegna data a ${item.title}`}>📅</button></form><button className="done-icon" onClick={()=>void complete({id:item.id,kind:'task',title:item.title,source:item})} title="Segna come fatto" aria-label={`Segna come fatto ${item.title}`}>✓</button></article>
+  const row=(item:AgendaItem)=><article key={`${item.kind}-${item.id}`} className="row today-row"><time>{item.time||'—'}</time><div><strong>{item.title}</strong>{item.detail&&<small>{item.detail}</small>}</div>{item.kind==='task'&&writeButton(item.source as Task)}<button className="done-icon" onClick={()=>void complete(item)} title="Segna come fatto" aria-label={`Segna come fatto ${item.title}`}>✓</button></article>
+  const todoRow=(item:Task)=><article key={item.id} className="row today-row todo-row"><div className="todo-description"><strong>{item.title}</strong>{(item.project_title||item.case_title)&&<small>{item.project_title||item.case_title}</small>}</div><form className="todo-schedule" onSubmit={event=>void schedule(item,event)}><input type="date" name="due_date" required aria-label={`Data per ${item.title}`}/><button type="submit" title="Assegna data" aria-label={`Assegna data a ${item.title}`}>📅</button></form>{writeButton(item)}<button className="done-icon" onClick={()=>void complete({id:item.id,kind:'task',title:item.title,source:item})} title="Segna come fatto" aria-label={`Segna come fatto ${item.title}`}>✓</button></article>
 
   return <div className="stack today-page">
     <Panel title="Oggi">

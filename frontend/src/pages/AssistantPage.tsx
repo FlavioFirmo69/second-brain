@@ -139,7 +139,7 @@ export function AssistantPage({initialConversation=''}:{initialConversation?:str
         {messages.map(message=><article key={message.id} className={`chat-message ${message.role}`}>
           {message.message_kind==='article' ? <div className="article-draft">
             <div id={`article-content-${message.id}`}><header><small>{String(message.metadata?.author_code||'Bozza editoriale')}</small><h2>{String(message.metadata?.title||'Articolo')}</h2>{Boolean(message.metadata?.subtitle)&&<p>{String(message.metadata?.subtitle)}</p>}</header><MarkdownView value={message.content_markdown}/></div>
-            <button className="copy-article" onClick={()=>void copyArticle(message)}>{copied===message.id?'Copiato ✓':'Copia per Substack'}</button>
+            <button className="copy-article" onClick={()=>void copyArticle(message)}>{copied===message.id?'Copiato ✓':message.metadata?.content_format==='email'?'Copia email':'Copia per Substack'}</button>
           </div> : structured(message)||<MarkdownView value={message.content_markdown}/>} 
         </article>)}
         {busy&&<div className="thinking">Sto elaborando…</div>}

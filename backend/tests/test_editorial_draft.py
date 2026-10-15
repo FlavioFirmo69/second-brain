@@ -13,6 +13,23 @@ def test_article_request_is_recognized(prompt):assert work.is_article_request(pr
 def test_calendar_question_is_not_article_request():
     assert not work.is_article_request('Quando devo pubblicare su Substack?')
 
+def test_mailing_request_is_recognized():
+    assert work.is_article_request('Scrivi il testo per la mailing list: Arona')
+
+def test_mailing_draft_uses_subject_and_email_format(monkeypatch):
+    data={'project':{'title':'Il subbuteo si racconta'},'author':{'code':'FLAVIO','voice_markdown':'Voce narrativa e autentica'},
+          'requested_task':{'title':'Mailing: Arona — incontrare la storia e chi l’ha vissuta'}}
+    async def complete(messages,**kwargs):
+        assert 'title contiene l’oggetto' in messages[0]['content']
+        assert 'Il subbuteo si racconta' in messages[0]['content']
+        assert 'Voce narrativa e autentica' in messages[0]['content']
+        return json.dumps({'title':'Arona, una storia da incontrare','subtitle':'Le persone dietro il racconto',
+                           'content_markdown':'Una bozza narrativa per la mailing list, senza inventare date o dettagli dell’incontro. '*4})
+    monkeypatch.setattr(work,'complete',complete)
+    result=asyncio.run(work.draft_book_article(None,{},'Scrivi il testo per Mailing: Arona',[],data=data))
+    assert result['kind']=='article' and result['data']['content_format']=='email'
+    assert result['data']['author_code']=='FLAVIO'
+
 def test_rubicone_scoped_chat_generates_article_with_cesare_profile_and_copy_metadata(monkeypatch):
     bid=uuid4()
     monkeypatch.setattr(work,'context',lambda *a:{'id':bid,'title':'Rubicone','author_profile_id':'cesare'})
