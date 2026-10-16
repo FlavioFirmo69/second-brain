@@ -65,7 +65,7 @@ def date_it(value: date | str | None) -> str:
     return parsed.strftime("%d/%m/%Y")
 
 
-async def answer(session: Session, raw_text: str, history: list[dict[str, str]] | None = None) -> dict:
+async def answer(session: Session, raw_text: str, history: list[dict[str, str]] | None = None, *, failure_sink=None) -> dict:
     repo = Repository(session)
     command = normalize(raw_text)
     if re.search(r"\b(?:apri|aprire|crea|creare|avvia|avviare|inizia|iniziare)\b.*\b(?:una\s+)?(?:nuova\s+)?pratica\b", command):
@@ -419,9 +419,12 @@ Non creare vendite o movimenti finanziari. Se la richiesta è ambigua usa respon
     except json.JSONDecodeError:
         return {"mode": "llm", "kind": "text", "data": {"text": response}, "message": response}
     except (KeyError, TypeError, ValueError) as exc:
-        item = repo.add_inbox(raw_text, "assistant")
+        error=f'Risposta LLM non valida ({exc.__class__.__name__}).'
+        item = failure_sink(error) if failure_sink else repo.add_inbox(raw_text, 'llm_failed')
+        if not failure_sink: repo.set_inbox_error(item['id'],error)
         return {"mode": "queued", "kind": "inbox", "data": item,
                 "message": f"Risposta LLM non valida ({exc.__class__.__name__}). Richiesta conservata nell'inbox."}
     except LlmUnavailable as exc:
-        item = repo.add_inbox(raw_text, "assistant")
+        item = failure_sink(str(exc)) if failure_sink else repo.add_inbox(raw_text, 'llm_failed')
+        if not failure_sink: repo.set_inbox_error(item['id'],str(exc))
         return {"mode": "queued", "kind": "inbox", "data": item, "message": str(exc)}

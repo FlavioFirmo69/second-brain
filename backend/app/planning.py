@@ -427,7 +427,7 @@ def stock_book(session, uid, code):
 def inventory(session: Session = Depends(get_session)):
     uid = Repository(session).user_id()
     items = rows(session.execute(text("SELECT b.code,b.title,COALESCE(p.quantity,0) AS purchased,COALESCE(s.quantity,0) AS sold,COALESCE(p.quantity,0)-COALESCE(s.quantity,0) AS available FROM sb2_books b JOIN sb2_author_profiles a ON a.id=b.author_profile_id LEFT JOIN LATERAL (SELECT SUM(quantity) AS quantity FROM sb2_stock_purchases WHERE book_id=b.id) p ON true LEFT JOIN LATERAL (SELECT SUM(quantity) AS quantity FROM sb2_sales WHERE book_id=b.id AND from_inventory) s ON true WHERE a.user_id=:uid ORDER BY b.title"), {"uid":uid}))
-    purchases = rows(session.execute(text("SELECT p.id,b.title,p.purchase_date,p.quantity FROM sb2_stock_purchases p JOIN sb2_books b ON b.id=p.book_id JOIN sb2_author_profiles a ON a.id=b.author_profile_id WHERE p.user_id=:uid AND a.user_id=:uid ORDER BY p.purchase_date DESC,p.created_at DESC"), {"uid":uid}))
+    purchases = rows(session.execute(text("SELECT p.id,b.code AS book_code,b.title,p.purchase_date,p.quantity FROM sb2_stock_purchases p JOIN sb2_books b ON b.id=p.book_id JOIN sb2_author_profiles a ON a.id=b.author_profile_id WHERE p.user_id=:uid AND a.user_id=:uid ORDER BY p.purchase_date DESC,p.created_at DESC"), {"uid":uid}))
     return {"items":items,"purchases":purchases}
 
 @router.post('/inventory')

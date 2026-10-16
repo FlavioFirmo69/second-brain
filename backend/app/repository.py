@@ -801,10 +801,21 @@ class Repository:
         return dict(after)
 
     def inbox(self) -> list[dict[str, Any]]:
-        items = rows(self.session.execute(text("SELECT id,source,text,status,created_at,processed_at FROM sb2_inbox WHERE user_id=:uid AND status<>'cancelled' ORDER BY created_at DESC"), {"uid": self.user_id()}))
+        items = rows(self.session.execute(text("SELECT id,source,text,status,created_at,processed_at,interpretation_json FROM sb2_inbox WHERE user_id=:uid AND status<>'cancelled' ORDER BY created_at DESC"), {"uid": self.user_id()}))
         for item in items:
             item["can_execute"] = self.can_execute_inbox(item["text"]) and item["status"] == "new"
+            item['details']=json.loads(item.pop('interpretation_json') or '{}')
+            item['category']='retry' if item['source'] in ('llm_failed','assistant') else 'note'
         return items
+
+    def set_inbox_error(self, identity, message):
+        previous=self.session.execute(text('SELECT interpretation_json FROM sb2_inbox WHERE id=:id AND user_id=:uid'),{'id':identity,'uid':self.user_id()}).scalar_one_or_none()
+        details=json.loads(previous or '{}')
+        details['last_error']=message
+        self.session.execute(text("UPDATE sb2_inbox SET status='new',interpretation_json=:details WHERE id=:id AND user_id=:uid"),
+            {'id':identity,'uid':self.user_id(),'details':json.dumps(details,ensure_ascii=False)})
+        self.session.commit()
+        return self.inbox_item(identity)
 
     def can_execute_inbox(self, value: str) -> bool:
         command = " ".join(value.lower().strip().split())

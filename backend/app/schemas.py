@@ -43,6 +43,12 @@ class InboxCreate(BaseModel):
     text: str = Field(min_length=1)
     source: str = Field(default="desktop", max_length=40)
 
+class InboxUpdate(BaseModel):
+    text: str = Field(min_length=1,max_length=30000)
+    category: str = Field(pattern=r'^(retry|note)$')
+    project_id: UUID | None = None
+    case_id: UUID | None = None
+
 
 class SaleCreate(BaseModel):
     from_inventory: bool = False

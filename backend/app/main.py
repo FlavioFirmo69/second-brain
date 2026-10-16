@@ -21,6 +21,7 @@ from .version import APP_VERSION
 from .work import router as work_router
 from .strategic import router as strategic_router
 from .personal_profile import router as personal_profile_router
+from .inbox import router as inbox_router
 
 settings = get_settings()
 logger = logging.getLogger("uvicorn.error")
@@ -67,6 +68,7 @@ app.include_router(work_router)
 app.include_router(planning_router)
 app.include_router(strategic_router)
 app.include_router(personal_profile_router)
+app.include_router(inbox_router)
 
 # In locale il frontend continua a essere servito da Vite sulla porta 5173.
 # Durante la build Vercel crea frontend/dist e FastAPI lo pubblica alla radice.

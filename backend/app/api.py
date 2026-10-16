@@ -271,18 +271,8 @@ def delete_inbox(item_id: UUID, repository: Repository = Depends(repo)):
 
 @router.post("/inbox/{item_id}/execute")
 async def execute_inbox(item_id: UUID, session: Session = Depends(get_session)):
-    repository = Repository(session)
-    try:
-        item = repository.inbox_item(item_id)
-        if item["status"] != "new" or not repository.can_execute_inbox(item["text"]):
-            raise HTTPException(status_code=409, detail="Questo comando non può essere eseguito automaticamente")
-        result = await answer(session, item["text"])
-        if result.get("kind") not in {"event_created", "events_created", "task_created", "tasks_created", "sales"}:
-            raise HTTPException(status_code=409, detail="Il comando non ha prodotto un'azione eseguibile")
-        repository.complete_inbox(item_id, result)
-        return result
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    from .inbox import retry_inbox
+    return await retry_inbox(item_id,session)
 
 
 @router.get("/commands")
