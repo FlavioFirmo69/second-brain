@@ -478,7 +478,7 @@ class Repository:
         items = rows(self.session.execute(text("""
             SELECT b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
                    b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
-                   b.promotion_status,b.publication_date_precision,
+                   b.promotion_status,b.publication_date_precision,b.planned_release_date,b.release_plan_note,
                    a.code AS author_code,a.display_name AS author_name,
                    COALESCE(SUM(s.quantity),0) AS sold,
                    t.target_value,t.target_date
@@ -493,7 +493,7 @@ class Repository:
             WHERE a.user_id=:uid
             GROUP BY b.id,b.code,b.title,b.status,b.publication_date,b.format_notes,b.genre,
                    b.synopsis,b.themes,b.target_reader,b.positioning,b.differentiators,b.tone_notes,
-                     b.promotion_status,b.publication_date_precision,
+                     b.promotion_status,b.publication_date_precision,b.planned_release_date,b.release_plan_note,
                      a.code,a.display_name,t.target_value,t.target_date
             ORDER BY b.title
         """), {"uid": uid}))
@@ -512,6 +512,18 @@ class Repository:
                 WHERE book_id=:book_id ORDER BY format_code
             """), {"book_id": item["id"]}))
         return items
+
+    def update_release_target(self, book_id: UUID, data: dict[str, Any]) -> dict[str, Any]:
+        uid=self.user_id()
+        before=self.session.execute(text('''SELECT b.id,b.planned_release_date,b.release_plan_note FROM sb2_books b
+            JOIN sb2_author_profiles a ON a.id=b.author_profile_id WHERE b.id=:id AND a.user_id=:uid FOR UPDATE OF b'''),{'id':book_id,'uid':uid}).mappings().one_or_none()
+        if before is None:raise KeyError('Libro non trovato')
+        updated=self.session.execute(text('''UPDATE sb2_books SET planned_release_date=:planned_release_date,
+            release_plan_note=:release_plan_note,updated_at=now() WHERE id=:id
+            RETURNING id,planned_release_date,release_plan_note'''),{'id':book_id,**data}).mappings().one()
+        self.log(uid,'book',book_id,'release_target',dict(before),dict(updated))
+        self.session.commit()
+        return dict(updated)
 
     def update_book(self, book_id: UUID, data: dict[str, Any]) -> dict[str, Any]:
         uid = self.user_id()

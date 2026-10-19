@@ -5,7 +5,7 @@ from copy import deepcopy
 FIELDS = {
     'tasks': ('id','title','status','priority','due_date','due_time','project_id','case_id','book_id','plan_id','strategy_id'),
     'events': ('id','title','status','event_date','start_time','end_time','location','event_type','project_id','case_id','book_id','plan_id','strategy_id'),
-    'books': ('id','code','title','status','author_profile_id','publication_date'),
+    'books': ('id','code','title','status','author_profile_id','publication_date','planned_release_date','release_plan_note'),
     'book_editions': ('id','book_id','format_code','list_price','is_active'),
     'balance_checks': ('id','account_id','balance_date','balance','notes'),
 }

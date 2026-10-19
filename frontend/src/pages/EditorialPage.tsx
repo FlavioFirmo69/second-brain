@@ -3,6 +3,7 @@ import { api, put } from '../api'
 import { MarkdownView } from '../components/MarkdownView'
 import { Panel } from '../components/Panel'
 import { Status } from '../components/Status'
+import { PublicationTimeline } from '../components/PublicationTimeline'
 import { PublicationOperations, type Inventory } from '../components/PublicationOperations'
 import { formatDate } from '../date'
 import type { Book, Profile, SaleProgress, Strategy, StrategyMonitoring } from '../types'
@@ -26,13 +27,14 @@ export function EditorialPage() {
       {loading?<p>Caricamento…</p>:!visible.length?<p>Nessuna pubblicazione per i filtri selezionati.</p>:<div className="book-list">{visible.map(book=>{
         const sale=sales.items.find(s=>s.code===book.code),stock=inventory.items.find(i=>i.code===book.code)
         return <BookCard key={book.id} book={book} profiles={profiles} onSaved={load} metrics={<>
-          <small>Stato editoriale: {book.status}</small>
+          <small>Stato editoriale: {book.status}</small>{book.planned_release_date&&<small>Uscita obiettivo: {formatDate(book.planned_release_date)}</small>}
           <small>Vendite {sale?.sold??book.sold} · Target {sale?.target_value??book.target_value??'non definito'}{sale?.target_date?' entro il '+formatDate(sale.target_date):''}</small>
           {sale?.target_value!=null&&<small>Stato target: {sale.status==='target_reached'?'raggiunto':'in corso'}</small>}
           <small>Ebook {sale?.ebook_sold??0} · Cartaceo {sale?.paperback_sold??0} · Magazzino {stock?.available??0} copie</small>
         </>}><PublicationOperations book={book} stock={stock} sales={(sales.recent_sales||[]).filter(s=>s.book_code===book.code)} purchases={inventory.purchases.filter(p=>p.book_code===book.code)} onSaved={load}/></BookCard>
       })}</div>}
     </Panel>
+    {!loading&&<PublicationTimeline books={books} onSaved={load}/>}
     <Panel title="Monitoraggio strategie">{monitoring.length?<div className="cards strategy-monitoring">{monitoring.map(item=><article className="metric" key={item.id}><div className="monitor-heading"><div><h3>{item.title}</h3><small>{item.book_title}</small></div><Status value={item.monitor_status}/></div><strong>{item.actual_value} / {item.target_value}</strong><small>Atteso a oggi: {item.expected_value}{item.performance_percent!=null?` · ${item.performance_percent}% del ritmo`:''}</small><div className="monitor-actions"><span>Azioni completate <b>{item.actions_completed}/{item.actions_total}</b></span><span>Scadute <b>{item.actions_overdue}</b></span></div><small>Periodo {formatDate(item.start_date)} – {formatDate(item.end_date||item.target_date)}</small></article>)}</div>:<p>Nessuna strategia dispone ancora di collegamenti e target espliciti.</p>}</Panel>
     <Panel title="Strategie attive"><div className="strategy-list">{strategies.map(s=><details className="strategy-card" key={s.id}><summary><span><strong>{s.title}</strong>{s.book_title&&<small>{s.book_title}</small>}</span></summary><MarkdownView value={s.content_markdown}/></details>)}</div></Panel>
   </div>

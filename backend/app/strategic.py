@@ -74,6 +74,9 @@ del progetto o della pratica, ad esempio «nella pratica Fruit». Non mostrare n
 come cases, projects, tasks, sb2_cases, né UUID, nomi di tabelle o diciture «Fonte: cases».
 Gli identificativi restano nel contesto interno per collegare correttamente i dati. Non chiedere dati già presenti.
 Le fonti ufficiali prevalgono sullo storico e sui ricordi per lo stato corrente.
+planned_release_date è una data obiettivo autonoma, non una pubblicazione avvenuta. Non dedurre dipendenze
+tra titoli: spostare una data non sposta le altre. Valuta insieme queste date per carico di lavoro e
+sovrapposizioni tra profili, senza modificarle o creare attività autonomamente.
 Leggi task_deletions prima di interpretare attività, diario o ricordi: un’attività eliminata non è più
 una prova che il suo titolo sia un fatto avvenuto, anche se prima risultava completed.
 Una semplice eliminazione non prova neppure che il lavoro non sia stato fatto: ne ritira l’evidenza.

@@ -11,6 +11,7 @@ from .database import get_session
 from .repository import Repository
 from .schemas import AssistantRequest, BalanceCreate, BookUpdate, ConversationCreate, EventCreate, InboxCreate, ProfileUpdate, ProjectAssignment, ProjectCreate, SaleCreate, TaskCreate, TaskSchedule, TransactionCreate
 from .version import APP_VERSION
+from .schemas import ReleaseTargetUpdate
 
 router = APIRouter(prefix="/api")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -167,6 +168,13 @@ def strategy_monitoring(repository: Repository = Depends(repo)):
 @router.get("/books")
 def books(repository: Repository = Depends(repo)):
     return repository.books()
+
+@router.patch('/books/{book_id}/release-target')
+def update_release_target(book_id:UUID,payload:ReleaseTargetUpdate,repository:Repository=Depends(repo)):
+    try:
+        return repository.update_release_target(book_id,payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(404,str(exc)) from exc
 
 
 @router.put("/books/{book_id}")

@@ -853,6 +853,16 @@ main {
 }
 .project-list { display: grid; gap: 11px; }
 .book-list { display: grid; gap: 11px; }
+.release-timeline { overflow-x:auto; margin:18px 0; border:1px solid #e5ded4; border-radius:10px; }
+.release-grid { display:grid; grid-template-columns:110px repeat(12,minmax(125px,1fr)); min-width:1610px; }
+.release-lane { display:contents; }
+.release-author { position:sticky; left:0; z-index:1; background:#f8f5ee; padding:14px 10px; font-weight:600; border-bottom:1px solid #e5ded4; }
+.release-month { padding:12px 8px; background:#f0ece3; font-size:12px; border-left:1px solid #e5ded4; }
+.release-cell { position:relative; min-height:90px; padding:12px 5px; border-left:1px solid #eee7da; border-bottom:1px solid #e5ded4; background:linear-gradient(transparent 42px,#d8d3c8 42px,#d8d3c8 44px,transparent 44px); }
+.release-milestone { display:grid; gap:4px; width:100%; margin:0 0 8px; padding:8px; background:white; border:1px solid var(--release-color); border-radius:8px; color:#253147; text-align:left; overflow-wrap:anywhere; }
+.release-milestone > span { color:var(--release-color); }
+.release-milestone small { font-size:11px; }
+.release-chronology { margin:14px 0; }
 .publication-filters { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
 .publication-filters label { display:grid; gap:6px; flex:1 1 180px; }
 .publication-filters input,.publication-filters select { width:100%; padding:10px; border:1px solid #d9d3c9; border-radius:8px; }

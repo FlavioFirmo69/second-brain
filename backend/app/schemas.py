@@ -98,6 +98,10 @@ class BookUpdate(BaseModel):
     differentiators: str | None = None
     tone_notes: str | None = None
 
+class ReleaseTargetUpdate(BaseModel):
+    planned_release_date: date | None = None
+    release_plan_note: str | None = Field(default=None,max_length=1000)
+
 
 class ProfileUpdate(BaseModel):
     positioning: str
