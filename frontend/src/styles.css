@@ -16,6 +16,8 @@
 .strategic-page textarea { width:100%; min-height:100px; padding:12px; border:1px solid #d9d3c8; border-radius:8px; }
 .strategic-page select { max-width:100%; padding:8px; }
 .strategic-page article { padding:16px 0; border-bottom:1px solid #e7e1d6; }
+.strategic-proposal { margin:16px 0; padding:16px; border:1px solid #d9d3c8; border-radius:10px; background:#faf8f3; }
+.strategic-proposal input[type=date] { max-width:240px; padding:8px; }
 .strategic-page button { padding:10px 16px; border:1px solid #d9d3c8; border-radius:8px; }
 * {
   box-sizing: border-box;

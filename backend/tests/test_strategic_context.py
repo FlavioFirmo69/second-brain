@@ -29,3 +29,29 @@ def test_history_budget_preserves_whole_recent_messages_without_cutting_text():
               {'role':'user','content':'c'*20}]
     assert recent_history(messages,40)==messages[-2:]
     assert messages[0]['content']=='a'*20
+
+
+def test_old_closed_history_is_reduced_but_open_overdue_and_explicit_context_survive():
+    context={'date':'2026-10-23','sources':{'projects':[{'id':'sigma','title':'Sigma'}],
+        'tasks':[{'id':'open','status':'open','due_date':'2025-01-01'},
+                 {'id':'old','status':'completed','due_date':'2025-01-01'},
+                 {'id':'related','project_id':'sigma','status':'completed','due_date':'2025-01-01'},
+                 {'id':'cancelled','status':'cancelled'},
+                 {'id':'recent','status':'completed','due_date':'2026-10-20'}],
+        'events':[{'id':'past','event_date':'2025-01-01'},{'id':'future','event_date':'2027-01-01'}],
+        'personal_profiles':[{'content_markdown':'Autonomia'}],
+        'task_deletions':[{'incorrect_information':True,'title':'Libro pubblicato'}]}}
+    result=compact_context(context,relevant_text='Sigma')
+    assert [t['id'] for t in result['sources']['tasks']]==['open','related','recent']
+    assert [t['id'] for t in result['sources']['events']]==['future']
+    assert result['sources']['personal_profiles']==context['sources']['personal_profiles']
+    assert result['sources']['task_deletions']==context['sources']['task_deletions']
+    assert len(context['sources']['tasks'])==5
+    assert len(compact_context(context,memory_check=True)['sources']['tasks'])==5
+
+
+def test_service_failures_do_not_become_advice_history():
+    history=[{'role':'assistant','content':'Consulente non disponibile. Errore temporaneo.'},
+             {'role':'user','content':'Come procedo?'},
+             {'role':'assistant','content':'Proteggi il tempo personale.'}]
+    assert recent_history(history)==history[1:]

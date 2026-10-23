@@ -192,6 +192,43 @@ def test_extractor_failure_retains_diary_and_reports_no_saved_memory(monkeypatch
     assert saved_messages[0][1:3] == ('user','Racconto della giornata')
     assert 'non è stata completata' in result['message']
 
+
+def test_dated_suggestion_is_stored_on_assistant_message_and_returned_for_buttons(monkeypatch,context):
+    context['sources']['strategies']=[{'id':'cesare','status':'active','content_markdown':'Lettori responsabili commerciali PMI'}]
+    logged=[]
+    class R(Repo):
+        def add_conversation_message(self,*args):
+            logged.append(args)
+            return {'id':str(uuid4()),'role':args[1],'content_markdown':args[2],
+                    'message_kind':args[3],'metadata':args[4] if len(args)>4 else None}
+    monkeypatch.setattr(s,'Repository',R)
+    async def complete(messages,**kwargs):
+        assert kwargs['response_format']=={'type':'json_object'}
+        assert 'La data è un obiettivo' in messages[0]['content']
+        return json.dumps({'answer':'Possibile interlocutore, da verificare.', 'proposals':[{
+            'action':'Sondare con Maurizio l’interesse per Cesare', 'proposed_date':'2026-10-30',
+            'rationale':'Primo contatto indicativo, da concordare.', 'source_refs':['strategies:cesare']}]})
+    monkeypatch.setattr(s,'complete',complete)
+    result=asyncio.run(s.advice(s.Question(text='Quando potrei sondare Maurizio?'),Session()))
+    assert result['message']=='Possibile interlocutore, da verificare.'
+    assert result['assistant_message']['id']
+    saved=result['assistant_message']['metadata']['strategic_proposals']
+    assert saved[0]['status']=='proposed' and saved[0]['proposed_date']=='2026-10-30'
+    assert logged[-1][4]['strategic_proposals']==saved
+    assert logged[0][3]=='strategic_question' # No accepted decision is fabricated.
+
+
+def test_new_diary_response_sees_previous_rejection_from_other_conversations(monkeypatch,context):
+    rejection='Proposta strategica rifiutata: preferisco parlarne ad Arona, senza contatti prima.'
+    monkeypatch.setattr(s,'diary_context',lambda session:{'entries':[{'content_markdown':rejection}]})
+    async def complete(messages,**kwargs):
+        if 'Estrai selettivamente' in messages[0]['content']:return '{"candidates":[]}'
+        assert rejection in messages[-2]['content']
+        return 'Tengo conto della decisione precedente.'
+    monkeypatch.setattr(s,'complete',complete)
+    result=asyncio.run(s.advice(s.Question(text='Maurizio sarà ad Arona.',mode='diary'),Session()))
+    assert not result['error']
+
 def test_editable_personal_document_is_used_for_hr_interpretation(monkeypatch,context):
     context['sources']['personal_profiles']=[{'id':'personal','revision':3,
         'content_markdown':'Nel lavoro dipendente desidero rimanere ai margini. Proteggere il tempo per la scrittura.'}]

@@ -50,9 +50,30 @@ def test_missing_choices_is_a_safe_format_error(configured,monkeypatch):
     assert exc.value.code=='invalid_response'
 
 def test_timeout_is_distinguishable_from_unconfigured_model(configured,monkeypatch):
-    client(monkeypatch,error=httpx.ReadTimeout('private request details'))
+    requests=client(monkeypatch,error=httpx.ReadTimeout('private request details'))
     with pytest.raises(llm.LlmUnavailable) as exc:asyncio.run(llm.complete([]))
     assert exc.value.code=='timeout' and 'private request details' not in str(exc.value)
+    assert len(requests)==3
+
+
+@pytest.mark.parametrize('first',[httpx.ReadTimeout('private'),httpx.ConnectError('private'),408,503])
+def test_transient_failure_recovers_without_changing_the_request(configured,monkeypatch,first):
+    requests=[]
+    class Client:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def post(self,url,**kwargs):
+            requests.append(kwargs)
+            if len(requests)==1:
+                if isinstance(first,Exception):raise first
+                return httpx.Response(first,request=httpx.Request('POST',url))
+            return httpx.Response(200,json={'choices':[{'message':{'content':'OK'}}]})
+    monkeypatch.setattr(llm.httpx,'AsyncClient',Client)
+    async def sleep(*args):pass
+    monkeypatch.setattr(llm.asyncio,'sleep',sleep)
+    assert asyncio.run(llm.complete([{'role':'user','content':'Test'}]))=='OK'
+    assert len(requests)==2 and requests[0]==requests[1]
 
 def test_not_configured_does_not_claim_inbox_write(configured):
     configured.llm_enabled=False

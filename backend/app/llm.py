@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from typing import Any
 
 import httpx
@@ -40,7 +41,7 @@ async def complete(messages: list[dict[str, str]], response_format: dict[str, An
     messages = ([{'role': 'system', 'content': '\n\n'.join(system)}] if system else []) + [
         message for message in messages if message['role'] != 'system']
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(getattr(settings, 'llm_timeout_seconds', 90), connect=10)) as client:
             for attempt in range(3):
                 body: dict[str, Any] = {
                     "model": settings.llm_model,
@@ -49,12 +50,19 @@ async def complete(messages: list[dict[str, str]], response_format: dict[str, An
                 }
                 if response_format is not None:
                     body["response_format"] = response_format
-                response = await client.post(
-                    url,
-                    headers={"Authorization": f"Bearer {settings.llm_api_key}"},
-                    json=body,
-                )
-                if response.status_code not in {429, 500, 502, 503, 504} or attempt == 2:
+                try:
+                    response = await client.post(
+                        url,
+                        headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                        json=body,
+                    )
+                except (httpx.TimeoutException, httpx.TransportError):
+                    logger.warning('LLM transport failure: attempt=%s', attempt + 1)
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(2 ** attempt + random.uniform(0, .5))
+                    continue
+                if response.status_code not in {408, 429, 500, 502, 503, 504} or attempt == 2:
                     if not response.is_success:
                         error = response_error(response.status_code)
                         logger.warning('LLM request failed: code=%s status=%s', error.code, error.status)
@@ -65,7 +73,10 @@ async def complete(messages: list[dict[str, str]], response_format: dict[str, An
                         raise LlmUnavailable('Il servizio AI ha restituito una risposta vuota o non utilizzabile.', code='empty_response')
                     return content
                 retry_after = response.headers.get("Retry-After")
-                delay = min(float(retry_after), 5) if retry_after and retry_after.isdigit() else 2 ** attempt
+                try:
+                    delay = max(0, min(float(retry_after), 30)) if retry_after else 2 ** attempt + random.uniform(0, .5)
+                except ValueError:
+                    delay = 2 ** attempt + random.uniform(0, .5)
                 await asyncio.sleep(delay)
     except httpx.TimeoutException as exc:
         raise LlmUnavailable('Il servizio AI non ha risposto entro il tempo disponibile. Riprova con una richiesta più breve.', code='timeout') from exc

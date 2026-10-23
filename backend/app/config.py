@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_timeout_seconds: float = 90
 
     @property
     def cors_origins(self) -> list[str]:

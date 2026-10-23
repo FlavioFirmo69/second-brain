@@ -1,7 +1,7 @@
 {
   "name": "second-brain-frontend",
   "private": true,
-  "version": "0.28.6",
+  "version": "0.28.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
